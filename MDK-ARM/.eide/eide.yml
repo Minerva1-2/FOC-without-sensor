@@ -65,6 +65,8 @@ virtualFolder:
         - path: ../motorControl/Src/motorPara.c
         - path: ../motorControl/Src/globalControl.c
         - path: ../motorControl/Inc/globalControl.h
+        - path: ../motorControl/Src/circulation.c
+        - path: ../motorControl/Inc/circulation.h
       folders:
         - name: hardware
           files:
