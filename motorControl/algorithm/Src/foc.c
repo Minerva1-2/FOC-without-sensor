@@ -31,7 +31,7 @@ void Park(Motor_t *motor)
  * @param   Motor_t *motor, int32_t nowValue, int32_t aimValue
  * @return  Output
  */
-float pid(Motor_t *motor, int32_t nowValue, int32_t aimValue)
+float Pid(Motor_t *motor, int32_t nowValue, int32_t aimValue)
 {
     int32_t iError;     // current error
     float Output;       // speed output
@@ -86,7 +86,7 @@ void AntiPark(Motor_t *motor)
         float U1 = V_beta;
         float U2 = SQRT3_DIV_TWO * V_alpha - 0.5f * V_beta;
         float U3 = -SQRT3_DIV_TWO * V_alpha - 0.5f * V_beta;
-        //section judge
+        // section judge
         uint8_t A = U1 > 0.0f ? 1 : 0;
         uint8_t B = U2 > 0.0f ? 1 : 0;
         uint8_t C = U3 > 0.0f ? 1 : 0;

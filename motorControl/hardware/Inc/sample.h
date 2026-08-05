@@ -1,5 +1,5 @@
-#ifndef __CURRENT_H
-#define __CURRENT_H
+#ifndef __SAMPLE_H
+#define __SAMPLE_H
 
 #include <stdint.h>
 #include <stdbool.h>

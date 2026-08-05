@@ -7,7 +7,7 @@
 /*              voltagewhen the motor is static,GetPhaseCurrent function gain the phase current                    */
 /*              when the motor is exercising                                                                       */
 /*******************************************************************************************************************/
-#include "current.h"
+#include "sample.h"
 
 static float g_offset_Ia, g_offset_Ic;
 static uint16_t g_current_sample_num;

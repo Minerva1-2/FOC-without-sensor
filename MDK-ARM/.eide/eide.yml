@@ -64,13 +64,11 @@ virtualFolder:
         - path: ../motorControl/Inc/motorPara.h
         - path: ../motorControl/Src/motorPara.c
         - path: ../motorControl/Src/globalControl.c
-        - path: ../motorControl/Inc/globalControl.h
       folders:
         - name: hardware
           files:
-            - path: ../motorControl/hardware/Src/current.c
             - path: ../motorControl/hardware/Src/driver.c
-            - path: ../motorControl/hardware/Inc/driver.h
+            - path: ../motorControl/hardware/Src/sample.c
           folders: []
         - name: algorithm
           files:
