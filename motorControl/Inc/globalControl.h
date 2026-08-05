@@ -9,11 +9,5 @@
  *              SVPWM_ZERO_SQUENCE  : Zero squence SVPWM
  */
 #define SVPWM_ZERO_SQUENCE
-/**
- * @brief   FOC sensor sector define
- * @attention   FOC_WITHOUT_SENSOR : FOC without sensor
- *              FOC_WITH_SENSOR    : FOC with sensor
- */
-#define FOC_WITHOUT_SENSOR
 
 #endif

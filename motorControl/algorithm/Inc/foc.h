@@ -5,8 +5,6 @@
 #include <stdint.h>
 #include "motorPara.h"
 
-#define _constrain(output, max, min)      (output > max ? max : (output < min ? min : output))
-
 #define SQRT3_DIV_TWO   (0.86602540378f)    // √3 / 2
 #define ONE_DIV_SQRT3   (0.57735026919f)    // 1 / √3
 
