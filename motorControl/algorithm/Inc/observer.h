@@ -9,4 +9,7 @@
 #define TWO_PI         (6.28318530f)
 #define OMEGA_MAX      (1500.f)
 
+void ObserverSMO(Motor_t *motor);
+void PLL(Motor_t *motor);
+
 #endif

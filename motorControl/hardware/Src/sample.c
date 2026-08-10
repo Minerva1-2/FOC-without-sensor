@@ -8,11 +8,10 @@
 /*              when the motor is exercising                                                                       */
 /*******************************************************************************************************************/
 #include "sample.h"
+#include "stm32g4xx_ll_rcc.h"
 
 static float g_offset_Ia, g_offset_Ic;
 static uint16_t g_current_sample_num;
-
-static bool g_current_offset_state = false;
 
 /**
  * @fn      void GetOffsetCurrent(MotorFOC_t *motor)
@@ -24,7 +23,7 @@ void GetOffsetCurrent(Motor_t *motor)
 {
     if (motor->State != MOTOR_STOP)
         return;
-    if (g_current_offset_state)
+    if (motor->Current.g_current_offset_state)
         return;
 
 	g_offset_Ia += motor->Current.current_adc_a;
@@ -40,7 +39,7 @@ void GetOffsetCurrent(Motor_t *motor)
         g_current_sample_num = 0;
         g_offset_Ia = MOTOR_PARA_RESET;
         g_offset_Ic = MOTOR_PARA_RESET;
-        g_current_offset_state = true;
+        motor->Current.g_current_offset_state = true;
     }
 }
 /**
@@ -75,13 +74,30 @@ float GetPhaseCurrent(Motor_t *motor, uint8_t phase_flag)
 float GetVoltageBus(Motor_t *motor)
 {
     float v_adc = motor->Current.adc_bus * ADC_REF_VOLTAGE / ADC_FULL_SCALE;
+    
     return v_adc * VBUS_DIV_RATIO;
 }
-float GetTempture(Motor_t *motor)
+void GetTempture(Temperature_t *temp)
 {
-    float v_adc = motor->Current.adc_temp * ADC_REF_VOLTAGE / ADC_FULL_SCALE;
-    float r_ntc = NTC_R_REF * v_adc / (ADC_REF_VOLTAGE - v_adc);
-    float t_k = 1.0f / (1.0f / 298.15f + (1.0f / NTC_B) * logf(r_ntc / NTC_R25));
+    temp->curr_resistor = temp->resistor_other * (ADC_FULL_SCALE - temp->adc_value) / temp->adc_value;
+    temp->ln_value = logf(temp->curr_resistor / temp->resistor_ref);
+    temp->curr_temp = 1.0f / (1.0f / temp->temperature_ref + 1.0f / temp->B_value * temp->ln_value) - K_TEMPERATURE;
+}
+float GetPwmPeriod(void)
+{
+    uint32_t pclk2 = HAL_RCC_GetPCLK2Freq();
+    uint32_t tim_clk = pclk2;
+    /* APB 预分频 >1 时，TIMxCLK = PCLK × 2（G4 规则，用 LL 库读取） */
+    if (LL_RCC_GetAPB2Prescaler() != LL_RCC_APB2_DIV_1)
+    {
+        tim_clk = pclk2 * 2U;
+    }
 
-    return t_k - 273.15f;
+    /* 中心对齐：完整 PWM 周期 = 2 × (PSC+1) × (ARR+1) / TIM1CLK */
+    float pwm_period = 2.0f * (float)(htim1.Init.Prescaler + 1U)
+                            * (float)(htim1.Init.Period + 1U)
+                            / (float)tim_clk;
+
+    /* ×(RCR+1) 得到实际更新事件周期 = FOC 执行节拍 */
+    return pwm_period * (float)(htim1.Init.RepetitionCounter + 1U);
 }

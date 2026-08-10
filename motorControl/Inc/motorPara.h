@@ -2,7 +2,7 @@
 #define __MOTORPARA_H
 
 #include <stdint.h>
-#include "globalControl.h"
+#include <stdbool.h>
 
 #define _constrain(output, max, min)      (output > max ? max : (output < min ? min : output))
 
@@ -24,8 +24,11 @@ typedef struct
     float d;
     float OutputMin;                                // min output limiting
     float OutputMax;                                // max output limiting
+    float Output;
     int32_t lastError;                              // last error
     int32_t prevError;                              // the first two times error
+    int32_t nowValue;
+    int32_t aimValue;
 }PID_t;
 /* 电气参数 */
 typedef struct
@@ -57,11 +60,16 @@ typedef struct
 {
     uint16_t current_adc_a;                         // ADC sampled current raw value
     uint16_t current_adc_c;
+    uint16_t adc_postion;                           // 波轮电位器 ADC 原始值
     float current_offset_Ia;                        // offset current value
     float current_offset_Ic;
+    float current_phase_Ia;
+    float current_phase_Ib;
+    float current_phase_Ic;
     float voltage_bus;                              // bus votage value
     float adc_bus;                                  // bus adc value
-    float adc_temp;
+    float pot_ratio;                                // 波轮电位器归一化比例 0~1
+    bool g_current_offset_state;                    // 偏置电流采样状态
 }Current_t;
 typedef struct
 {
@@ -70,6 +78,17 @@ typedef struct
     float Duty_c;
     float pwm_period;                               // pwm period
 }PWM_t;
+typedef struct
+{
+    uint16_t adc_value;                             // adc采样数据
+    float B_value;                                  // B值
+    float temperature_ref;                          // 参考温度值
+    float resistor_ref;                             // 参考温度下的阻值
+    float curr_resistor;                            // 当前阻值
+    float ln_value;                                 // 自然对数值
+    float resistor_other;                           // 分压电阻阻值
+    float curr_temp;                                // 当前温度
+}Temperature_t;
 /* 电机结构体 */
 typedef struct 
 {
@@ -82,6 +101,7 @@ typedef struct
     PWM_t PWM;                                      // motor Pwm parameter
 }Motor_t;
 
+Temperature_t *GetTemperatureStruct(void);
 Motor_t *GetMotorStruct(void);
 
 #endif

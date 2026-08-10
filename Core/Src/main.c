@@ -27,7 +27,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
-
+#include "globalControl.h"
+#include "driver.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -96,13 +97,19 @@ int main(void)
   MX_USART1_UART_Init();
   MX_ADC2_Init();
   /* USER CODE BEGIN 2 */
-
+    Temperature_t *temp = GetTemperatureStruct();
+    Motor_t *motor = GetMotorStruct();
+    // 参数初始化
+    TemperatureInit(temp);
+    MotorParaInit(motor);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    // 按键事件
+    KeyEventHandler(GetMotorStruct());
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

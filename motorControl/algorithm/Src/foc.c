@@ -26,17 +26,17 @@ void Park(Motor_t *motor)
     motor->FOC.Iq = -(motor->FOC.I_alpha * sin_angle) + motor->FOC.I_beta * cos_angle;
 }
 /**
- * @fn  float pid(Motor_t *motor, int32_t nowValue, int32_t aimValue)
+ * @fn  void pid(Motor_t *motor)
  * @brief   incremental PID control
- * @param   Motor_t *motor, int32_t nowValue, int32_t aimValue
- * @return  Output
+ * @param   Motor_t *motor
+ * @return  null
  */
-float Pid(Motor_t *motor, int32_t nowValue, int32_t aimValue)
+void Pid(Motor_t *motor)
 {
     int32_t iError;     // current error
     float Output;       // speed output
 
-    iError = aimValue - nowValue;
+    iError = motor->PID.aimValue - motor->PID.nowValue;
 
     Output = (motor->PID.p * iError)
             - (motor->PID.i * motor->PID.lastError)
@@ -45,7 +45,7 @@ float Pid(Motor_t *motor, int32_t nowValue, int32_t aimValue)
     motor->PID.prevError = motor->PID.lastError;
     motor->PID.lastError = iError;
     //output limiting
-    return _constrain(Output, motor->PID.OutputMax, motor->PID.OutputMin);
+    motor->PID.Output = _constrain(Output, motor->PID.OutputMax, motor->PID.OutputMin);
 }
 /**
  * @fn  void AntiPark(Motor_t *motor)
