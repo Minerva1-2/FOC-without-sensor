@@ -59,7 +59,9 @@ typedef struct
     uint16_t current_adc_c;
     float current_offset_Ia;                        // offset current value
     float current_offset_Ic;
-    float voltage_bus;                              // bus votage
+    float voltage_bus;                              // bus votage value
+    float adc_bus;                                  // bus adc value
+    float adc_temp;
 }Current_t;
 typedef struct
 {

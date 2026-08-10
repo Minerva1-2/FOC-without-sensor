@@ -72,3 +72,16 @@ float GetPhaseCurrent(Motor_t *motor, uint8_t phase_flag)
     
     return (voltage / (CURRENT_AMP_GAIN * CURRENT_SHUNT_OHM));
 }
+float GetVoltageBus(Motor_t *motor)
+{
+    float v_adc = motor->Current.adc_bus * ADC_REF_VOLTAGE / ADC_FULL_SCALE;
+    return v_adc * VBUS_DIV_RATIO;
+}
+float GetTempture(Motor_t *motor)
+{
+    float v_adc = motor->Current.adc_temp * ADC_REF_VOLTAGE / ADC_FULL_SCALE;
+    float r_ntc = NTC_R_REF * v_adc / (ADC_REF_VOLTAGE - v_adc);
+    float t_k = 1.0f / (1.0f / 298.15f + (1.0f / NTC_B) * logf(r_ntc / NTC_R25));
+
+    return t_k - 273.15f;
+}
