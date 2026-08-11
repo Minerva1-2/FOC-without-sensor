@@ -30,6 +30,26 @@ void Park(Motor_t *motor)
     motor->FOC.Iq = -(motor->FOC.I_alpha * sin_angle) + motor->FOC.I_beta * cos_angle;
 }
 /**
+ * @brief  位置式 PID 通用计算
+ * @param  pid: PID 实例；aim: 目标值；now: 当前值
+ * @retval 限幅后的输出
+ */
+static float PIDCalc(PID_t *pid, float aimValue, float nowValue)
+{
+    float error = aimValue - nowValue;
+
+    pid->integral += error;
+    pid->integral = _constrain(pid->integral, pid->OutputMax, pid->OutputMin);
+
+    float out = pid->p * error
+              + pid->i * pid->integral
+              + pid->d * (error - pid->lastError);
+    pid->lastError = error;
+
+    pid->Output = _constrain(out, pid->OutputMax, pid->OutputMin);
+    return pid->Output;
+}
+/**
  * @fn  void pid(Motor_t *motor)
  * @brief   incremental PID control
  * @param   Motor_t *motor
@@ -37,17 +57,11 @@ void Park(Motor_t *motor)
  */
 static void DefaultPID(Motor_t *motor)
 {
-    int32_t iError; // current error
-    float Output;   // speed output
+   float omega_mech = motor->PLL.theta_hat / (float)MOTOR_POLE_PAIRS;
+   float iq_ref = PIDCalc(&motor->PID_Speed, motor->PID_Speed.aimValue, omega_mech);
 
-    iError = motor->PID.aimValue - motor->PID.nowValue;
-
-    Output = (motor->PID.p * iError) - (motor->PID.i * motor->PID.lastError) + (motor->PID.d * motor->PID.prevError);
-
-    motor->PID.prevError = motor->PID.lastError;
-    motor->PID.lastError = iError;
-    // output limiting
-    motor->PID.Output = _constrain(Output, motor->PID.OutputMax, motor->PID.OutputMin);
+    motor->FOC.Vd = PIDCalc(&motor->PID_Id, 0.0f, motor->FOC.Id);
+    motor->FOC.Vq = PIDCalc(&motor->PID_Iq, iq_ref, motor->FOC.Iq);
 }
 /**
  * @fn  void AntiPark(Motor_t *motor)

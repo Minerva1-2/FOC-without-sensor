@@ -29,7 +29,6 @@ void KeyScanIsr(void);
 
 void MotorDriverEnable(void);
 void MotorDriverDisable(void);
-void LedON(Motor_t *motor);
-void LedOFF(void);
+void LedControl(Motor_t *motor);
 
 #endif

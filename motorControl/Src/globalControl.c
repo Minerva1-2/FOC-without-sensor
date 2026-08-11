@@ -110,12 +110,12 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
         switch (motor->State)
         {
         case MOTOR_ALIGN:
-            if (g_align_volt_ramp < ALIGN_VOLTAGE)      // 施加预定电压，通过线性斜坡缓慢增加电压（离散积分）
+            if (g_align_volt_ramp < ALIGN_VOLTAGE) // 施加预定电压，通过线性斜坡缓慢增加电压（离散积分）
                 g_align_volt_ramp += ALIGN_VOLTAGE * (motor->PWM.pwm_period / 0.1f);
             if (g_align_volt_ramp > ALIGN_VOLTAGE)
                 g_align_volt_ramp = ALIGN_VOLTAGE;
 
-            motor->FOC.angle = ALIGN_ANGLE;         // 给D轴施加电压进行0位校准
+            motor->FOC.angle = ALIGN_ANGLE; // 给D轴施加电压进行0位校准
             motor->FOC.Vd = g_align_volt_ramp;
             motor->FOC.Vq = 0.0f;
 
@@ -129,7 +129,7 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
                 MotorOpenLoopStart();
             break;
         case MOTOR_OPENLOOP:
-            if (g_open_omega < OPENLOOP_OMEGA_END)      // 线性增加角速度值
+            if (g_open_omega < OPENLOOP_OMEGA_END) // 线性增加角速度值
                 g_open_omega += OPENLOOP_ACCEL * motor->PWM.pwm_period;
             if (g_open_omega > OPENLOOP_OMEGA_END)
                 g_open_omega = OPENLOOP_OMEGA_END;
@@ -245,17 +245,28 @@ void MotorParaInit(Motor_t *motor)
     motor->FOC.Vd = 0.0f;
     motor->FOC.Vq = 0.0f;
     motor->FOC.angle = 0.0f;
-    // pid parameter init
-    motor->PID.p = 0.0f;
-    motor->PID.i = 0.0f;
-    motor->PID.d = 0.0f;
-    motor->PID.lastError = 0.0f;
-    motor->PID.prevError = 0.0f;
-    motor->PID.aimValue = 0.0f;
-    motor->PID.nowValue = 0.0f;
-    motor->PID.Output = 0.0f;
-    motor->PID.OutputMax = 0.0f;
-    motor->PID.OutputMin = 0.0f;
+    /* 速度环：带宽约 10~30 rad/s，输出限幅 = 允许的峰值电流(A) */
+    motor->PID_Speed.p = 0.05f;
+    motor->PID_Speed.i = 0.001f;
+    motor->PID_Speed.d = 0.0f;
+    motor->PID_Speed.OutputMax = 5.0f;
+    motor->PID_Speed.OutputMin = -5.0f;
+    motor->PID_Speed.aimValue = 0.0f;
+    motor->PID_Speed.integral = 0.0f;
+    /* d 轴电流环：带宽约 500~1000 rad/s，输出限幅 = 母线电压 ~80% */
+    motor->PID_Id.p = 1.0f;
+    motor->PID_Id.i = 0.01f;
+    motor->PID_Id.d = 0.0f;
+    motor->PID_Id.OutputMax = 8.0f; /* 母线电压估算值，实机按 Vbus 调 */
+    motor->PID_Id.OutputMin = -8.0f;
+    motor->PID_Id.integral = 0.0f;
+    /* q 轴电流环：同 d 轴 */
+    motor->PID_Iq.p = 1.0f;
+    motor->PID_Iq.i = 0.01f;
+    motor->PID_Iq.d = 0.0f;
+    motor->PID_Iq.OutputMax = 8.0f;
+    motor->PID_Iq.OutputMin = -8.0f;
+    motor->PID_Iq.integral = 0.0f;
     // pll parameter init
     motor->PLL.p = 0.0f;
     motor->PLL.i = 0.0f;

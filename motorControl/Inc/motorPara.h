@@ -12,10 +12,10 @@
 
 /* 电机状态参数 */
 typedef enum {
-    MOTOR_RUN,
-    MOTOR_STOP,
     MOTOR_ALIGN,
     MOTOR_OPENLOOP,
+    MOTOR_RUN,
+    MOTOR_STOP,
 }State_t;
 /* PID参数 */
 typedef struct
@@ -26,10 +26,11 @@ typedef struct
     float OutputMin;                                // min output limiting
     float OutputMax;                                // max output limiting
     float Output;
-    int32_t lastError;                              // last error
-    int32_t prevError;                              // the first two times error
-    int32_t nowValue;
-    int32_t aimValue;
+    float lastError;                              // last error
+    float prevError;                              // the first two times error
+    float nowValue;
+    volatile float aimValue;
+    float integral;
 }PID_t;
 /* 电气参数 */
 typedef struct
@@ -95,7 +96,9 @@ typedef struct
 {
     State_t State;
     Current_t Current;                              // motor state
-    PID_t PID;                                      // motor PID parameter
+    PID_t PID_Speed;
+    PID_t PID_Iq;
+    PID_t PID_Id;
     FOC_t FOC;                                      // motor FOC parameter
     SMO_t SMO;                                      // motor SMO parameter
     PLL_t PLL;                                      // motor PLL parameter

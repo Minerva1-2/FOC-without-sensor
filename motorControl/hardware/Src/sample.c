@@ -92,12 +92,10 @@ float GetPwmPeriod(void)
     {
         tim_clk = pclk2 * 2U;
     }
-
     /* 中心对齐：完整 PWM 周期 = 2 × (PSC+1) × (ARR+1) / TIM1CLK */
     float pwm_period = 2.0f * (float)(htim1.Init.Prescaler + 1U)
                             * (float)(htim1.Init.Period + 1U)
                             / (float)tim_clk;
-
     /* ×(RCR+1) 得到实际更新事件周期 = FOC 执行节拍 */
     return pwm_period * (float)(htim1.Init.RepetitionCounter + 1U);
 }

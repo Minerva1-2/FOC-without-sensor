@@ -1,20 +1,20 @@
 /* USER CODE BEGIN Header */
 /**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2026 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
+ ******************************************************************************
+ * @file           : main.c
+ * @brief          : Main program body
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2026 STMicroelectronics.
+ * All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
@@ -38,7 +38,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define TX_BUFFER_SIZE    64
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -49,7 +49,8 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+static uint32_t last_tick = 0;
+static char Tx_buffer[TX_BUFFER_SIZE] = {0};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -64,9 +65,9 @@ void SystemClock_Config(void);
 /* USER CODE END 0 */
 
 /**
-  * @brief  The application entry point.
-  * @retval int
-  */
+ * @brief  The application entry point.
+ * @retval int
+ */
 int main(void)
 {
 
@@ -97,11 +98,11 @@ int main(void)
   MX_USART1_UART_Init();
   MX_ADC2_Init();
   /* USER CODE BEGIN 2 */
-    Temperature_t *temp = GetTemperatureStruct();
-    Motor_t *motor = GetMotorStruct();
-    // 参数初始化
-    TemperatureInit(temp);
-    MotorParaInit(motor);
+  Temperature_t *temp = GetTemperatureStruct();
+  Motor_t *motor = GetMotorStruct();
+  // 参数初始化
+  TemperatureInit(temp);
+  MotorParaInit(motor);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -109,7 +110,38 @@ int main(void)
   while (1)
   {
     // 按键事件
-    KeyEventHandler(GetMotorStruct());
+    KeyEventHandler(motor);
+    // 波轮电位器调节速度
+    if (HAL_GetTick() - last_tick > 2U)
+    {
+      last_tick = HAL_GetTick();
+
+      float target = MOTOR_SEPPD_COEFFICIENT * motor->Current.pot_ratio;
+      float diff = target - motor->PID_Speed.aimValue;
+
+      if (diff > 0.5f)
+        diff = 0.5f;
+      else if (diff < -0.5f)
+        diff = -0.5f;
+      motor->PID_Speed.aimValue += diff;
+    }
+    // 数据发送
+    int Tx_buff_len = snprintf(Tx_buffer, sizeof(Tx_buffer),
+                               "Aim:%.2f Now:%.2f Ia:%.2f Ib:%.2f Ic:%.2f Theta:%.2f Vbus:%.2f Temp:%.2f\n",
+                               motor->PID_Speed.aimValue,
+                               motor->PID_Speed.nowValue,
+                               motor->FOC.Ia,
+                               motor->FOC.Ib,
+                               motor->FOC.Ic,
+                               motor->PLL.theta_hat,
+                               motor->Current.voltage_bus,
+                               temp->curr_temp);
+    if ((Tx_buff_len > 0) && (Tx_buff_len <= TX_BUFFER_SIZE))
+    {
+      printf("%s", Tx_buffer);
+    }
+    // Led提示
+    LedControl(motor);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -118,21 +150,21 @@ int main(void)
 }
 
 /**
-  * @brief System Clock Configuration
-  * @retval None
-  */
+ * @brief System Clock Configuration
+ * @retval None
+ */
 void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
   /** Configure the main internal regulator output voltage
-  */
+   */
   HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1_BOOST);
 
   /** Initializes the RCC Oscillators according to the specified parameters
-  * in the RCC_OscInitTypeDef structure.
-  */
+   * in the RCC_OscInitTypeDef structure.
+   */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
@@ -148,9 +180,8 @@ void SystemClock_Config(void)
   }
 
   /** Initializes the CPU, AHB and APB buses clocks
-  */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+   */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
@@ -167,9 +198,9 @@ void SystemClock_Config(void)
 /* USER CODE END 4 */
 
 /**
-  * @brief  This function is executed in case of error occurrence.
-  * @retval None
-  */
+ * @brief  This function is executed in case of error occurrence.
+ * @retval None
+ */
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
@@ -182,12 +213,12 @@ void Error_Handler(void)
 }
 #ifdef USE_FULL_ASSERT
 /**
-  * @brief  Reports the name of the source file and the source line number
-  *         where the assert_param error has occurred.
-  * @param  file: pointer to the source file name
-  * @param  line: assert_param error line source number
-  * @retval None
-  */
+ * @brief  Reports the name of the source file and the source line number
+ *         where the assert_param error has occurred.
+ * @param  file: pointer to the source file name
+ * @param  line: assert_param error line source number
+ * @retval None
+ */
 void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */
