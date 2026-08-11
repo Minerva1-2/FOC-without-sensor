@@ -50,7 +50,7 @@ void PLL(Motor_t *motor)
     }
     // integral accumulation
     motor->PLL.integral += motor->PLL.i * motor->PLL.theta_error * motor->PWM.pwm_period;
-    motor->PLL.integral = _constrain(motor->PLL.i, OMEGA_MAX, -OMEGA_MAX);
+    motor->PLL.integral = _constrain(motor->PLL.integral, OMEGA_MAX, -OMEGA_MAX);
     // electrial speed
     motor->PLL.omerga_hat = motor->PLL.p * motor->PLL.theta_error + motor->PLL.integral;
     motor->PLL.omerga_hat = _constrain(motor->PLL.omerga_hat, OMEGA_MAX, -OMEGA_MAX);
@@ -62,5 +62,5 @@ void PLL(Motor_t *motor)
     if (motor->PLL.theta_hat < -PI)
         motor->PLL.theta_hat += TWO_PI;
     // output estimation angle
-    motor->FOC.angle = motor->PLL.theta_error;
+    motor->FOC.angle = motor->PLL.theta_hat;
 }

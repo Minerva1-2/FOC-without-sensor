@@ -87,10 +87,10 @@ void KeyEventHandler(Motor_t *motor)
             motor->State = MOTOR_STOP;
             MotorDriverDisable();
         }
-        else
+        else if (motor->State == MOTOR_STOP)
         {
-            motor->State = MOTOR_RUN;
             MotorDriverEnable();
+            MotorAlignStart();
         }
     }
 
@@ -102,7 +102,7 @@ void KeyEventHandler(Motor_t *motor)
 void KeyScanIsr(void)   /* SysTick 1ms 调用，只扫不处理 */
 {
     KeyScan(&g_key1, KEY1_GPIO_Port, KEY1_Pin);
-    KeyScan(&g_key2, KEY2_GPIO_Port, KEY2_Pin);
+    //KeyScan(&g_key2, KEY2_GPIO_Port, KEY2_Pin);
 }
 /**
  * @fn  void MotorDriverEnable(void)
@@ -147,12 +147,6 @@ void LedON(Motor_t *motor)
         HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, GPIO_PIN_RESET);
         HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
         HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, GPIO_PIN_SET);
-    }
-    else if (MOTOR_FAULT == motor->State)
-    {
-        HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
-        HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, GPIO_PIN_SET);
-        HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, GPIO_PIN_SET);
     }
 }
 /**

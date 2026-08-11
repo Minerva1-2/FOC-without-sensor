@@ -14,7 +14,8 @@
 typedef enum {
     MOTOR_RUN,
     MOTOR_STOP,
-    MOTOR_FAULT,
+    MOTOR_ALIGN,
+    MOTOR_OPENLOOP,
 }State_t;
 /* PID参数 */
 typedef struct
