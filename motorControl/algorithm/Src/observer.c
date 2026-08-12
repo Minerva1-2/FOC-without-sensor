@@ -1,3 +1,11 @@
+/*
+ * @Author: Minerva1-2 18993035310@163.com
+ * @Date: 2026-08-12 21:41:41
+ * @LastEditors: Minerva1-2 18993035310@163.com
+ * @LastEditTime: 2026-08-12 22:39:11
+ * @FilePath: \MDK-ARMd:\cubemx\project\keil\FOC-without-sensor\motorControl\algorithm\Src\observer.c
+ * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
+ */
 #include "observer.h"
 /**
  * @fn  void ObserverSMO(Motor_t *motor)
@@ -12,10 +20,10 @@ void ObserverSMO(Motor_t *motor)
     float R_over_L = MOTOR_PHASE_R / MOTOR_PHASE_L;
     float inv_L = 1.0f / MOTOR_PHASE_L;
     // current observer
-    motor->SMO.I_alpha_hat += Ts * (-R_over_L * motor->SMO.I_alpha_hat + (motor->FOC.V_alpha - motor->SMO.e_alpha_hat) * inv_L);
+    motor->SMO.I_alpha_hat += Ts * (-R_over_L * motor->SMO.I_alpha_hat + (motor->FOC.V_alpha - motor->SMO.e_alpha_raw) * inv_L);
     motor->SMO.I_beta_hat += Ts * ((-MOTOR_PHASE_R / MOTOR_PHASE_L) *
                                        motor->SMO.I_beta_hat +
-                                   (motor->FOC.V_beta - motor->SMO.e_beta_hat) * inv_L);
+                                   (motor->FOC.V_beta - motor->SMO.e_beta_raw) * inv_L);
     // 滑膜切换函数
     float err_a = motor->SMO.I_alpha_hat - motor->FOC.I_alpha;
     float err_b = motor->SMO.I_beta_hat - motor->FOC.I_beta;

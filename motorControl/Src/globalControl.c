@@ -379,7 +379,7 @@ void MotorParaInit(Motor_t *motor)
     motor->State = MOTOR_STOP;
 
     HAL_ADC_Start_DMA(&hadc2, (uint32_t *)g_adc_buf, SAMPLE_BUFFER);
-
+    HAL_ADCEx_InjectedStart_IT(&hadc2);
     /* 注入转换由 TIM1 更新中断（HAL_TIM_PeriodElapsedCallback）逐周期软件触发。
        关键：HAL_TIM_PWM_Start_IT 只使能 CC 中断、不使能更新中断，
        必须用 HAL_TIM_Base_Start_IT 使能更新中断（参照盛浩板），
