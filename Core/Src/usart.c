@@ -142,7 +142,35 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
 
 /* USER CODE BEGIN 1 */
 /**
-  * @brief  Redirect printf output to USART1 (Keil AC6 + MicroLIB)
+  * @brief  禁用标准库半主机（semihosting）
+  * @note   AC6 + 标准库（EIDE use-microLIB: false）下，printf 底层会调用
+  *         _sys_open/_sys_write 等半主机接口，未禁用时程序上电即卡在 BKPT
+  *         （调试器在场则响应半主机请求，所以"只有调试时能运行"）。
+  *         此段让 printf 完全走下面的 fputc 重定向，不再触发半主机。
+  */
+#if defined(__ARMCC_VERSION) && (__ARMCC_VERSION >= 6010050)
+/* AC6：标准库禁用半主机 */
+__asm(".global __use_no_semihosting\n");
+void _sys_exit(int return_code)
+{
+    (void)return_code;
+    while (1) { }
+}
+void _ttywrch(int ch)
+{
+    (void)ch;
+}
+FILE __stdout;
+#else
+/* AC5：标准库禁用半主机 */
+#pragma import(__use_no_semihosting)
+struct __FILE { int handle; };
+FILE __stdout;
+void _sys_exit(int x) { (void)x; }
+void _ttywrch(int ch) { (void)ch; }
+#endif
+/**
+  * @brief  Redirect printf output to USART1 (Keil AC6 标准库 + 半主机已禁用)
   * @param  ch: character to transmit
   * @param  f: FILE stream (unused)
   * @retval ch on success

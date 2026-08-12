@@ -29,7 +29,12 @@
 "foc_sensorless\stm32g4xx_hal_uart.o"
 "foc_sensorless\stm32g4xx_hal_uart_ex.o"
 "foc_sensorless\system_stm32g4xx.o"
-"foc_sensorless\current.o"
+"foc_sensorless\globalcontrol.o"
+"foc_sensorless\motorpara.o"
+"foc_sensorless\foc.o"
+"foc_sensorless\observer.o"
+"foc_sensorless\driver.o"
+"foc_sensorless\sample.o"
 --strict --scatter "foc_sensorless\foc_sensorless.sct"
 --summary_stderr --info summarysizes --map --load_addr_map_info --xref --callgraph --symbols
 --info sizes --info totals --info unused --info veneers

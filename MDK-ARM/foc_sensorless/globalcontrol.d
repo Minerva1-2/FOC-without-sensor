@@ -1,12 +1,20 @@
-foc_sensorless/stm32g4xx_it.o: ..\Core\Src\stm32g4xx_it.c \
-  ..\Core\Inc\main.h ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal.h \
+foc_sensorless/globalcontrol.o: ..\motorControl\Src\globalControl.c \
+  ..\motorControl\Inc\globalControl.h \
+  D:\keil\core\ARM\ARMCLANG\Bin\..\include\stdio.h \
+  ..\motorControl\Inc\motorPara.h \
+  D:\keil\core\ARM\ARMCLANG\Bin\..\include\stdint.h \
+  D:\keil\core\ARM\ARMCLANG\Bin\..\include\stdbool.h \
+  ..\motorControl\algorithm\Inc\observer.h \
+  D:\keil\core\ARM\ARMCLANG\Bin\..\include\math.h \
+  ..\motorControl\Inc\motorPara.h ..\motorControl\hardware\Inc\sample.h \
+  ..\Core\Inc\tim.h ..\Core\Inc\main.h \
+  ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal.h \
   ..\Core\Inc\stm32g4xx_hal_conf.h \
   ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal_rcc.h \
   ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal_def.h \
   ..\Drivers\CMSIS\Device\ST\STM32G4xx\Include\stm32g4xx.h \
   ..\Drivers\CMSIS\Device\ST\STM32G4xx\Include\stm32g431xx.h \
   ..\Drivers\CMSIS\Include\core_cm4.h \
-  D:\keil\core\ARM\ARMCLANG\Bin\..\include\stdint.h \
   ..\Drivers\CMSIS\Include\cmsis_version.h \
   ..\Drivers\CMSIS\Include\cmsis_compiler.h \
   ..\Drivers\CMSIS\Include\cmsis_armclang.h \
@@ -35,12 +43,5 @@ foc_sensorless/stm32g4xx_it.o: ..\Core\Src\stm32g4xx_it.c \
   ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal_tim_ex.h \
   ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal_uart.h \
   ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal_uart_ex.h \
-  ..\Core\Inc\stm32g4xx_it.h ..\motorControl\hardware\Inc\driver.h \
-  ..\Core\Inc\gpio.h ..\Core\Inc\main.h \
-  ..\motorControl\Inc\globalControl.h \
-  D:\keil\core\ARM\ARMCLANG\Bin\..\include\stdio.h \
-  ..\motorControl\Inc\motorPara.h \
-  D:\keil\core\ARM\ARMCLANG\Bin\..\include\stdbool.h \
-  ..\motorControl\algorithm\Inc\observer.h \
-  D:\keil\core\ARM\ARMCLANG\Bin\..\include\math.h \
-  ..\motorControl\Inc\motorPara.h
+  ..\motorControl\algorithm\Inc\foc.h ..\Core\Inc\adc.h \
+  ..\motorControl\hardware\Inc\driver.h ..\Core\Inc\gpio.h

@@ -1,12 +1,16 @@
-foc_sensorless/stm32g4xx_it.o: ..\Core\Src\stm32g4xx_it.c \
-  ..\Core\Inc\main.h ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal.h \
-  ..\Core\Inc\stm32g4xx_hal_conf.h \
-  ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal_rcc.h \
-  ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal_def.h \
+foc_sensorless/foc.o: ..\motorControl\algorithm\Src\foc.c \
+  ..\motorControl\algorithm\Inc\foc.h \
+  D:\keil\core\ARM\ARMCLANG\Bin\..\include\math.h \
+  D:\keil\core\ARM\ARMCLANG\Bin\..\include\stdint.h \
+  ..\motorControl\Inc\motorPara.h \
+  D:\keil\core\ARM\ARMCLANG\Bin\..\include\stdbool.h \
+  ..\motorControl\Inc\globalControl.h \
+  D:\keil\core\ARM\ARMCLANG\Bin\..\include\stdio.h \
+  ..\motorControl\Inc\motorPara.h \
+  ..\motorControl\algorithm\Inc\observer.h \
   ..\Drivers\CMSIS\Device\ST\STM32G4xx\Include\stm32g4xx.h \
   ..\Drivers\CMSIS\Device\ST\STM32G4xx\Include\stm32g431xx.h \
   ..\Drivers\CMSIS\Include\core_cm4.h \
-  D:\keil\core\ARM\ARMCLANG\Bin\..\include\stdint.h \
   ..\Drivers\CMSIS\Include\cmsis_version.h \
   ..\Drivers\CMSIS\Include\cmsis_compiler.h \
   ..\Drivers\CMSIS\Include\cmsis_armclang.h \
@@ -14,6 +18,10 @@ foc_sensorless/stm32g4xx_it.o: ..\Core\Src\stm32g4xx_it.c \
   D:\keil\core\ARM\ARMCLANG\Bin\..\include\arm_acle.h \
   ..\Drivers\CMSIS\Include\mpu_armv7.h \
   ..\Drivers\CMSIS\Device\ST\STM32G4xx\Include\system_stm32g4xx.h \
+  ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal.h \
+  ..\Core\Inc\stm32g4xx_hal_conf.h \
+  ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal_rcc.h \
+  ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal_def.h \
   ..\Drivers\STM32G4xx_HAL_Driver\Inc\Legacy\stm32_hal_legacy.h \
   D:\keil\core\ARM\ARMCLANG\Bin\..\include\stddef.h \
   ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal_rcc_ex.h \
@@ -34,13 +42,4 @@ foc_sensorless/stm32g4xx_it.o: ..\Core\Src\stm32g4xx_it.c \
   ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal_tim.h \
   ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal_tim_ex.h \
   ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal_uart.h \
-  ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal_uart_ex.h \
-  ..\Core\Inc\stm32g4xx_it.h ..\motorControl\hardware\Inc\driver.h \
-  ..\Core\Inc\gpio.h ..\Core\Inc\main.h \
-  ..\motorControl\Inc\globalControl.h \
-  D:\keil\core\ARM\ARMCLANG\Bin\..\include\stdio.h \
-  ..\motorControl\Inc\motorPara.h \
-  D:\keil\core\ARM\ARMCLANG\Bin\..\include\stdbool.h \
-  ..\motorControl\algorithm\Inc\observer.h \
-  D:\keil\core\ARM\ARMCLANG\Bin\..\include\math.h \
-  ..\motorControl\Inc\motorPara.h
+  ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal_uart_ex.h

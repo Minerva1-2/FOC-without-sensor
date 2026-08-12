@@ -7,15 +7,16 @@
 #define _constrain(output, max, min)      (output > max ? max : (output < min ? min : output))
 
 #define MOTOR_POLE_PAIRS    (7U)
-#define MOTOR_PHASE_R       (0.085f)
-#define MOTOR_PHASE_L       (0.000025f)
+#define MOTOR_PHASE_R       (0.206f)
+#define MOTOR_PHASE_L       (0.000046f)
 
 /* 电机状态参数 */
 typedef enum {
-    MOTOR_ALIGN,
-    MOTOR_OPENLOOP,
-    MOTOR_RUN,
-    MOTOR_STOP,
+    MOTOR_CALIB,        /* ADC 偏置校准：上电先采样 1024 次零电流偏置 */
+    MOTOR_ALIGN,        /* 预定位：电流闭环，固定角度吸住转子 */
+    MOTOR_OPENLOOP,     /* 开环强拖：电流闭环，旋转磁场牵引转子 */
+    MOTOR_RUN,          /* 闭环运行：SMO+PLL 速度/电流双闭环 */
+    MOTOR_STOP,         /* 停机：零占空比 */
 }State_t;
 /* PID参数 */
 typedef struct
@@ -36,6 +37,7 @@ typedef struct
 typedef struct
 {
     float Ia, Ib, Ic;                               // phase current value
+    float Va, Vb, Vc;
     float I_alpha, I_beta;                          // static coordinate system current value
     float V_alpha, V_beta; 
     float Iq, Id;                                   // rotating coordinate system current value

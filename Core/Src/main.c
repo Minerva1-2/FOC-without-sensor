@@ -26,7 +26,6 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include <stdio.h>
 #include "globalControl.h"
 #include "driver.h"
 /* USER CODE END Includes */
@@ -38,7 +37,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define TX_BUFFER_SIZE    64
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -49,8 +48,7 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-static uint32_t last_tick = 0;
-static char Tx_buffer[TX_BUFFER_SIZE] = {0};
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -65,9 +63,9 @@ void SystemClock_Config(void);
 /* USER CODE END 0 */
 
 /**
- * @brief  The application entry point.
- * @retval int
- */
+  * @brief  The application entry point.
+  * @retval int
+  */
 int main(void)
 {
 
@@ -103,6 +101,8 @@ int main(void)
   // 参数初始化
   TemperatureInit(temp);
   MotorParaInit(motor);
+  // 上电待机：驱动保持关闭(SD 低)、PWM 不输出，电机三态自由；
+  // 目标速度>0 后由主循环调用 MotorStart() 启动
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -110,36 +110,21 @@ int main(void)
   while (1)
   {
     // 按键事件
-    KeyEventHandler(motor);
+    // KeyEventHandler(motor);
     // 波轮电位器调节速度
-    if (HAL_GetTick() - last_tick > 2U)
+    MotorSpedControl(motor);
+    // 待机启动：目标速度>0 时启动电机（使能栅极驱动 + 进入偏置校准→预定位→开环强拖→闭环）
+    if ((motor->State == MOTOR_STOP) && (motor->PID_Speed.aimValue > 0.5f))
     {
-      last_tick = HAL_GetTick();
-
-      float target = MOTOR_SEPPD_COEFFICIENT * motor->Current.pot_ratio;
-      float diff = target - motor->PID_Speed.aimValue;
-
-      if (diff > 0.5f)
-        diff = 0.5f;
-      else if (diff < -0.5f)
-        diff = -0.5f;
-      motor->PID_Speed.aimValue += diff;
+      MotorDriverEnable();   // 使能栅极驱动（SD 拉高）——此前 MotorStart 被删后此步遗漏，导致电机三态自由、无吸力
+      motor->State = MOTOR_CALIB;
     }
-    // 数据发送
-    int Tx_buff_len = snprintf(Tx_buffer, sizeof(Tx_buffer),
-                               "Aim:%.2f Now:%.2f Ia:%.2f Ib:%.2f Ic:%.2f Theta:%.2f Vbus:%.2f Temp:%.2f\n",
-                               motor->PID_Speed.aimValue,
-                               motor->PID_Speed.nowValue,
-                               motor->FOC.Ia,
-                               motor->FOC.Ib,
-                               motor->FOC.Ic,
-                               motor->PLL.theta_hat,
-                               motor->Current.voltage_bus,
-                               temp->curr_temp);
-    if ((Tx_buff_len > 0) && (Tx_buff_len <= TX_BUFFER_SIZE))
+    else if (motor->State != MOTOR_STOP && (motor->PID_Speed.aimValue <= 0.5f))
     {
-      printf("%s", Tx_buffer);
+      MotorDriverDisable();  // 目标归零：关闭驱动，电机回到三态自由待机
+      motor->State = MOTOR_STOP;
     }
+    TxMotorData(motor, temp);
     // Led提示
     LedControl(motor);
     /* USER CODE END WHILE */
@@ -150,21 +135,21 @@ int main(void)
 }
 
 /**
- * @brief System Clock Configuration
- * @retval None
- */
+  * @brief System Clock Configuration
+  * @retval None
+  */
 void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
   /** Configure the main internal regulator output voltage
-   */
+  */
   HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1_BOOST);
 
   /** Initializes the RCC Oscillators according to the specified parameters
-   * in the RCC_OscInitTypeDef structure.
-   */
+  * in the RCC_OscInitTypeDef structure.
+  */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
@@ -180,8 +165,9 @@ void SystemClock_Config(void)
   }
 
   /** Initializes the CPU, AHB and APB buses clocks
-   */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
+  */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
@@ -198,9 +184,9 @@ void SystemClock_Config(void)
 /* USER CODE END 4 */
 
 /**
- * @brief  This function is executed in case of error occurrence.
- * @retval None
- */
+  * @brief  This function is executed in case of error occurrence.
+  * @retval None
+  */
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
@@ -213,12 +199,12 @@ void Error_Handler(void)
 }
 #ifdef USE_FULL_ASSERT
 /**
- * @brief  Reports the name of the source file and the source line number
- *         where the assert_param error has occurred.
- * @param  file: pointer to the source file name
- * @param  line: assert_param error line source number
- * @retval None
- */
+  * @brief  Reports the name of the source file and the source line number
+  *         where the assert_param error has occurred.
+  * @param  file: pointer to the source file name
+  * @param  line: assert_param error line source number
+  * @retval None
+  */
 void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */

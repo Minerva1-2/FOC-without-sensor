@@ -108,8 +108,8 @@ void MX_ADC2_Init(void)
   sConfigInjected.InjectedDiscontinuousConvMode = DISABLE;
   sConfigInjected.AutoInjectedConv = DISABLE;
   sConfigInjected.QueueInjectedContext = DISABLE;
-  sConfigInjected.ExternalTrigInjecConv = ADC_EXTERNALTRIGINJEC_T1_TRGO;
-  sConfigInjected.ExternalTrigInjecConvEdge = ADC_EXTERNALTRIGINJECCONV_EDGE_RISING;
+  sConfigInjected.ExternalTrigInjecConv = ADC_INJECTED_SOFTWARE_START;
+  sConfigInjected.ExternalTrigInjecConvEdge = ADC_EXTERNALTRIGINJECCONV_EDGE_NONE;
   sConfigInjected.InjecOversamplingMode = DISABLE;
   if (HAL_ADCEx_InjectedConfigChannel(&hadc2, &sConfigInjected) != HAL_OK)
   {
@@ -125,7 +125,13 @@ void MX_ADC2_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN ADC2_Init 2 */
-
+  /* 注入组改为软件触发（参照盛浩板：每个 TIM1 更新中断里 HAL_ADCEx_InjectedStart_IT 启动注入转换）。
+     覆盖生成区的 T1_TRGO 硬件触发（硬件触发链路在本板未生效，注入组从未转换导致状态机卡在 MOTOR_CALIB）。 */
+  sConfigInjected.ExternalTrigInjecConv = ADC_SOFTWARE_START;
+  sConfigInjected.ExternalTrigInjecConvEdge = ADC_EXTERNALTRIGINJECCONV_EDGE_NONE;
+  HAL_ADCEx_InjectedConfigChannel(&hadc2, &sConfigInjected);
+  /* 软件触发注入必须禁用注入队列(JQDIS=1)，否则 HAL_ADCEx_InjectedStart_IT 返回 HAL_ERROR */
+  HAL_ADCEx_DisableInjectedQueue(&hadc2);
   /* USER CODE END ADC2_Init 2 */
 
 }

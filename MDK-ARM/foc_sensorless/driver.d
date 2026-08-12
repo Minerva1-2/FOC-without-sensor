@@ -1,4 +1,5 @@
-foc_sensorless/stm32g4xx_it.o: ..\Core\Src\stm32g4xx_it.c \
+foc_sensorless/driver.o: ..\motorControl\hardware\Src\driver.c \
+  ..\motorControl\hardware\Inc\driver.h ..\Core\Inc\gpio.h \
   ..\Core\Inc\main.h ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal.h \
   ..\Core\Inc\stm32g4xx_hal_conf.h \
   ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal_rcc.h \
@@ -35,8 +36,6 @@ foc_sensorless/stm32g4xx_it.o: ..\Core\Src\stm32g4xx_it.c \
   ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal_tim_ex.h \
   ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal_uart.h \
   ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal_uart_ex.h \
-  ..\Core\Inc\stm32g4xx_it.h ..\motorControl\hardware\Inc\driver.h \
-  ..\Core\Inc\gpio.h ..\Core\Inc\main.h \
   ..\motorControl\Inc\globalControl.h \
   D:\keil\core\ARM\ARMCLANG\Bin\..\include\stdio.h \
   ..\motorControl\Inc\motorPara.h \

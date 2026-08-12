@@ -21,7 +21,8 @@ static uint16_t g_current_sample_num;
  */
 void GetOffsetCurrent(Motor_t *motor)
 {
-    if (motor->State != MOTOR_STOP)
+    /* 仅在偏置校准(MOTOR_CALIB)或停机(MOTOR_STOP)状态下采集零电流偏置 */
+    if ((motor->State != MOTOR_STOP) && (motor->State != MOTOR_CALIB))
         return;
     if (motor->Current.g_current_offset_state)
         return;
@@ -75,7 +76,7 @@ float GetVoltageBus(Motor_t *motor)
 {
     float v_adc = motor->Current.adc_bus * ADC_REF_VOLTAGE / ADC_FULL_SCALE;
     
-    return v_adc * VBUS_DIV_RATIO;
+    return v_adc / VBUS_DIV_RATIO;
 }
 void GetTempture(Temperature_t *temp)
 {
