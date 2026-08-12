@@ -62,20 +62,6 @@ static void SetPWMValue(uint32_t PWMValue_A, uint32_t PWMValue_B, uint32_t PWMVa
     __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, PWMValue_C);
 }
 /**
- * @brief   TIM1 更新中断回调：每个 PWM 周期软件触发一次 ADC2 注入转换（相电流采样）。
- *          参照盛浩板做法：注入组配为软件触发(JQDIS=1)，转换完成后 JADSTART 自清除，
- *          因此每次更新事件都要重新启动一次注入。
- * @param   htim: TIM handle
- * @return  null
- */
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-{
-    if (htim->Instance == TIM1)
-    {
-        HAL_ADCEx_InjectedStart_IT(&hadc2);
-    }
-}
-/**
  * @brief   规则组ADC通道采集中断回调函数，采集母线电压、波轮电位器以及温度数值
  * @param   null
  * @return  null
