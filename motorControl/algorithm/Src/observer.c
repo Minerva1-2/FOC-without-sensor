@@ -13,7 +13,9 @@ void ObserverSMO(Motor_t *motor)
     float inv_L = 1.0f / MOTOR_PHASE_L;
     // current observer
     motor->SMO.I_alpha_hat += Ts * (-R_over_L * motor->SMO.I_alpha_hat + (motor->FOC.V_alpha - motor->SMO.e_alpha_hat) * inv_L);
-    motor->SMO.I_beta_hat += Ts * ((-MOTOR_PHASE_R / MOTOR_PHASE_L) * motor->SMO.I_beta_hat + (motor->FOC.V_beta - motor->SMO.e_beta_hat) * inv_L);
+    motor->SMO.I_beta_hat += Ts * ((-MOTOR_PHASE_R / MOTOR_PHASE_L) *
+                                       motor->SMO.I_beta_hat +
+                                   (motor->FOC.V_beta - motor->SMO.e_beta_hat) * inv_L);
     // 滑膜切换函数
     float err_a = motor->SMO.I_alpha_hat - motor->FOC.I_alpha;
     float err_b = motor->SMO.I_beta_hat - motor->FOC.I_beta;
