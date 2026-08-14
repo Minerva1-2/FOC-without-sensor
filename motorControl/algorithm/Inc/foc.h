@@ -11,14 +11,11 @@
 #define ONE_DIV_SQRT3       (0.57735026919f)    // 1 / √3
 #define SPEED_LPF_ALPHA     (0.01f)  /* 一阶低通系数：α≈2π×fc×Ts，fc≈16Hz@Ts=100µs */
 
-void Clark(Motor_t *motor);
-void Park(Motor_t *motor);
-void PID(Motor_t *motor);
-void AntiPark(Motor_t *motor);
-void SVPWM(Motor_t *motor);
-float PIDCalc(PID_t *pid, float aimValue, float nowValue);
-void SpeedFeedbackFiltInit(float omega_mech);
-void FuncRegister(void (*UserFuncPID)(Motor_t *motor),
-                  void (*UserFuncSVPWM)(Motor_t *motor));
+void Clark(FOC_t *foc);                                        /* 三相电流 → αβ 电流 */
+void Park(FOC_t *foc);                                         /* αβ 电流 → dq 电流 */
+void AntiPark(FOC_t *foc);                                     /* dq 电压 → αβ 电压 */
+float PIDCalc(PID_t *pid, float aimValue, float nowValue);     /* 通用位置式 PID(抗积分饱和) */
+void PID(PID_t * PID, FOC_t *FOC, PLL_t *PLL);
+void SVPWM(FOC_t *FOC, Current_t *Current, PWM_t *PWM);
 
 #endif

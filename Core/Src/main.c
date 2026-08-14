@@ -95,38 +95,15 @@ int main(void)
   MX_TIM1_Init();
   MX_USART1_UART_Init();
   MX_ADC2_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
-  Temperature_t *temp = GetTemperatureStruct();
-  Motor_t *motor = GetMotorStruct();
-  // 参数初始化
-  TemperatureInit(temp);
-  MotorParaInit(motor);
-  // 上电待机：驱动保持关闭(SD 低)、PWM 不输出，电机三态自由；
-  // 目标速度>0 后由主循环调用 MotorStart() 启动
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    // 按键事件
-    // KeyEventHandler(motor);
-    // 波轮电位器调节速度
-    MotorSpedControl(motor);
-    // 待机启动：目标速度>0 时启动电机（使能栅极驱动 + 进入偏置校准→预定位→开环强拖→闭环）
-    if ((motor->State == MOTOR_STOP) && (motor->PID_Speed.aimValue > 0.5f))
-    {
-      MotorDriverEnable();   // 使能栅极驱动（SD 拉高）——此前 MotorStart 被删后此步遗漏，导致电机三态自由、无吸力
-      motor->State = MOTOR_CALIB;
-    }
-    else if (motor->State != MOTOR_STOP && (motor->PID_Speed.aimValue <= 0.5f))
-    {
-      MotorDriverDisable();  // 目标归零：关闭驱动，电机回到三态自由待机
-      motor->State = MOTOR_STOP;
-    }
-    TxMotorData(motor, temp);
-    // Led提示
-    LedControl(motor);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

@@ -3,14 +3,13 @@
  * @Date: 2026-08-12 21:41:41
  * @LastEditors: Minerva1-2 18993035310@163.com
  * @LastEditTime: 2026-08-12 22:39:11
- * @FilePath: \MDK-ARMd:\cubemx\project\keil\FOC-without-sensor\motorControl\algorithm\Src\observer.c
- * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
+ * @Description: 滑膜观测器 + PLL，与 Motor_t 解耦：只操作传入的子结构体
  */
 #include "observer.h"
 /**
- * @fn  void ObserverSMO(Motor_t *motor)
+ * @fn  void ObserverSMO(SMO_t *smo, FOC_t *foc, float pwm_period)
  * @brief   get esimation counter electromotive force
- * @param   Motor_t *motor
+ * @param   smo: 观测器状态；foc: 电压(输入)/电流(反馈)；pwm_period: 控制周期(s)
  * @return  null
  */
 void ObserverSMO(Motor_t *motor)
@@ -21,16 +20,14 @@ void ObserverSMO(Motor_t *motor)
     float inv_L = 1.0f / MOTOR_PHASE_L;
     // current observer
     motor->SMO.I_alpha_hat += Ts * (-R_over_L * motor->SMO.I_alpha_hat + (motor->FOC.V_alpha - motor->SMO.e_alpha_raw) * inv_L);
-    motor->SMO.I_beta_hat += Ts * ((-MOTOR_PHASE_R / MOTOR_PHASE_L) *
-                                       motor->SMO.I_beta_hat +
-                                   (motor->FOC.V_beta - motor->SMO.e_beta_raw) * inv_L);
+    motor->SMO.I_beta_hat += Ts * (-R_over_L * motor->SMO.I_beta_hat + (motor->FOC.V_beta - motor->SMO.e_beta_raw) * inv_L);
     // 滑膜切换函数
     float err_a = motor->SMO.I_alpha_hat - motor->FOC.I_alpha;
     float err_b = motor->SMO.I_beta_hat - motor->FOC.I_beta;
     float sgn_a = (err_a > 1.0f) ? motor->SMO.K_slide : (err_a < -1.0f) ? -motor->SMO.K_slide
-                                                                        : motor->SMO.K_slide * err_a;
+                                                                   : motor->SMO.K_slide * err_a;
     float sgn_b = (err_b > 1.0f) ? motor->SMO.K_slide : (err_b < -1.0f) ? -motor->SMO.K_slide
-                                                                        : motor->SMO.K_slide * err_b;
+                                                                   : motor->SMO.K_slide * err_b;
     // 反电动势
     motor->SMO.e_alpha_raw = sgn_a;
     motor->SMO.e_beta_raw = sgn_b;
@@ -39,9 +36,9 @@ void ObserverSMO(Motor_t *motor)
     motor->SMO.e_beta_hat += SMO_LPF_ALPHA * (sgn_b - motor->SMO.e_beta_hat);
 }
 /**
- * @fn  void PLL(Motor_t *motor)
+ * @fn  void PLL(PLL_t *pll, SMO_t *smo, FOC_t *foc, float pwm_period)
  * @brief   get esimation angle
- * @param   Motor_t *motor
+ * @param   pll: PLL 状态；smo: 反电动势输入；foc: 输出角度写入 motor->FOC.angle；pwm_period: 控制周期(s)
  * @return  null
  */
 void PLL(Motor_t *motor)
@@ -57,7 +54,7 @@ void PLL(Motor_t *motor)
 
         motor->PLL.integral += motor->PLL.i * motor->PLL.theta_error * motor->PWM.pwm_period;
         motor->PLL.integral = _constrain(motor->PLL.integral, OMEGA_MAX, -OMEGA_MAX);
-        motor->PLL.omerga_hat = motor->PLL.p * motor->PLL.theta_error + motor->PLL.integral;
+        motor->PLL.omerga_hat = motor->PLL.p * motor->PLL.theta_error +motor->PLL.integral;
         motor->PLL.omerga_hat = _constrain(motor->PLL.omerga_hat, OMEGA_MAX, -OMEGA_MAX);
     }
     else

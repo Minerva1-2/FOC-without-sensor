@@ -4,6 +4,7 @@
 #include "tim.h"
 #include "adc.h"
 #include "driver.h"
+#include "key.h"
 
 static uint16_t g_adc_buf[SAMPLE_BUFFER]; // 采样数组==>g_adc_buf[0]：母线电压；g_adc_buf[1]：波轮电位器；g_adc_buf[2]：温度
 static uint16_t g_temp_sample_cnt;        // 温度计算节流计数器
@@ -18,49 +19,10 @@ static uint32_t g_open_start_tick;        // 系统tick获取
 static char Tx_buffer[TX_BUFFER_SIZE] = {0};
 static uint32_t last_tick = 0;
 
-/**
- * @brief   电机预定位时设置参数等信息，修改电机运行状态
- * @param   null
- * @return  null
- */
-void MotorAlignStart(void)
-{
-    Motor_t *motor = GetMotorStruct();
-    g_align_start_tick = HAL_GetTick();
-    motor->State = MOTOR_ALIGN;
-}
-/**
- * @brief   电机开环强拖时设置参数等信息，修改电机运行状态
- * @param   null
- * @return  null
- */
-static void MotorOpenLoopStart(void)
-{
-    Motor_t *motor = GetMotorStruct();
-    g_open_theta = ALIGN_ANGLE; /* 从预定位角度继续，角度连续 */
-    g_open_omega = OPENLOOP_OMEGA_START;
-    g_open_start_tick = HAL_GetTick();
-    g_obs_speed_ok_cnt = 0;   /* 重置收敛计数，避免残留计数导致立即切换 */
-    g_obs_angle_ok_cnt = 0;
-    motor->State = MOTOR_OPENLOOP;
-}
-/**
- * @brief   设置PWM占空比
- * @param   uint32_t PWMValue_A, uint32_t PWMValue_B, uint32_t PWMValue_C
- * @return  null
- */
-static void SetPWMValue(uint32_t PWMValue_A, uint32_t PWMValue_B, uint32_t PWMValue_C)
-{
-    /* 占空比限幅到 [0, Period+1]，防止 CCR 溢出导致 100% 输出（恒吸） */
-    uint32_t period = (uint32_t)htim1.Init.Period + 1U;
-    if (PWMValue_A > period) PWMValue_A = period;
-    if (PWMValue_B > period) PWMValue_B = period;
-    if (PWMValue_C > period) PWMValue_C = period;
-    
-    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, PWMValue_A);
-    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, PWMValue_B);
-    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, PWMValue_C);
-}
+static void MotorAlignStart(void);
+static void MotorOpenLoopStart(void);
+static void MotorState(Motor_t *motor);
+
 /**
  * @brief   规则组ADC通道采集中断回调函数，采集母线电压、波轮电位器以及温度数值
  * @param   null
@@ -123,138 +85,63 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
             if (++g_bus_uv_cnt >= BUS_UNDERVOLTAGE_CNT)
             {
                 g_bus_uv_cnt = 0;
-                motor->State = MOTOR_STOP;   /* 进 STOP 分支输出零占空比，等待电位器归零后由主循环重启 */
+                motor->State = MOTOR_STOP; /* 进 STOP 分支输出零占空比，等待电位器归零后由主循环重启 */
             }
         }
         else
         {
             g_bus_uv_cnt = 0;
         }
-        // 校准==>低速强拖==>滑膜观测器
-        switch (motor->State)
-        {
-        case MOTOR_CALIB:
-            GetOffsetCurrent(motor);
 
-            if (motor->Current.g_current_offset_state)
-                MotorAlignStart();
-            break;
-        case MOTOR_ALIGN:
-            /* 预定位：电流闭环。Id 给定励磁电流把转子吸到固定角度，电压由电流环输出，天然限流 */
-            motor->FOC.angle = ALIGN_ANGLE; // 给D轴施加电压进行0位校准
-            motor->FOC.Vd = PIDCalc(&motor->PID_Id, ALIGN_ID_REF, motor->FOC.Id);
-            motor->FOC.Vq = PIDCalc(&motor->PID_Iq, 0.0f, motor->FOC.Iq);
-
-            Clark(motor);
-            Park(motor);
-            AntiPark(motor);
-            SVPWM(motor);
-            SetPWMValue((uint32_t)(motor->PWM.Duty_a * (float)(htim1.Init.Period + 1U)),
-                        (uint32_t)(motor->PWM.Duty_b * ((float)htim1.Init.Period + 1U)),
-                        (uint32_t)(motor->PWM.Duty_c * ((float)htim1.Init.Period + 1U)));
-            // 预定位到时间，进入开环强拖
-            if (HAL_GetTick() - g_align_start_tick >= ALIGN_TIME_MS)
-                MotorOpenLoopStart();
-            break;
-        case MOTOR_OPENLOOP:
-        {
-            float obs_theta_err;      /* 开环角度与观测角度误差(rad) */
-            float omega_mech;         /* 观测机械角速度(rad/s) */
-            if (g_open_omega < OPENLOOP_OMEGA_END) // 线性增加角速度值
-                g_open_omega += OPENLOOP_ACCEL * motor->PWM.pwm_period;
-            if (g_open_omega > OPENLOOP_OMEGA_END)
-                g_open_omega = OPENLOOP_OMEGA_END;
-            // 获取角度：角速度对视时间的积分值
-            g_open_theta += g_open_omega * motor->PWM.pwm_period;
-            // 角度归一化
-            if (g_open_theta > PI)
-                g_open_theta -= TWO_PI;
-            else if (g_open_theta < -PI)
-                g_open_theta += TWO_PI;
-            // 滑膜观测器接入，提前进行收敛
-            Clark(motor);
-            ObserverSMO(motor);
-            PLL(motor);
-            // 电流闭环强拖：Id 给定励磁电流，旋转磁场牵引转子，电压由电流环输出
-            motor->FOC.angle = g_open_theta;
-            Park(motor);
-
-            motor->FOC.Vd = PIDCalc(&motor->PID_Id, OPENLOOP_ID_REF, motor->FOC.Id);
-            motor->FOC.Vq = PIDCalc(&motor->PID_Iq, 0.0f, motor->FOC.Iq);
-
-            AntiPark(motor);
-            SVPWM(motor);
-            SetPWMValue((uint32_t)(motor->PWM.Duty_a * (float)(htim1.Init.Period + 1U)),
-                        (uint32_t)(motor->PWM.Duty_b * ((float)htim1.Init.Period + 1U)),
-                        (uint32_t)(motor->PWM.Duty_c * ((float)htim1.Init.Period + 1U)));
-            // 开环/观测角度误差（归一化到 ±π），用于角度收敛判据
-            obs_theta_err = motor->PLL.theta_hat - g_open_theta;
-            if (obs_theta_err > PI)
-                obs_theta_err -= TWO_PI;
-            else if (obs_theta_err < -PI)
-                obs_theta_err += TWO_PI;
-            // 速度收敛计数：观测电角速度与开环给定对比，容差 OPENLOOP_OBS_SPEED_ERR
-            if (fabsf(motor->PLL.omerga_hat - g_open_omega) < OPENLOOP_OBS_SPEED_ERR)
-                g_obs_speed_ok_cnt++;
-            else
-                g_obs_speed_ok_cnt = 0;
-            // 角度收敛计数：低速反电动势弱，速度对但角度可能未收敛，必须角度也达标
-            if (fabsf(obs_theta_err) < OPENLOOP_OBS_THETA_ERR)
-                g_obs_angle_ok_cnt++;
-            else
-                g_obs_angle_ok_cnt = 0;
-            // 转速达标 + 稳定时间 + 速度/角度双收敛 → 切入闭环（仿盛浩板 StrongDragToObs）
-            if ((g_open_omega >= OPENLOOP_OMEGA_END) && (HAL_GetTick() - g_open_start_tick >= OPENLOOP_STABLE_MS)
-                && (g_obs_speed_ok_cnt >= OPENLOOP_OBS_OK_CNT)
-                && (g_obs_angle_ok_cnt >= OPENLOOP_OBS_ANGLE_OK_CNT))
-            {
-                /* 速度环接力：反馈滤波、速度环输出/积分初始化为当前观测转速与强拖电流，
-                   目标速度钳位到当前转速（误差=0），避免切换瞬间 Iq 参考阶跃顶死电源（24V→8V 失控根因） */
-                omega_mech = motor->PLL.omerga_hat / (float)MOTOR_POLE_PAIRS;
-                SpeedFeedbackFiltInit(omega_mech);      /* foc.c：初始化速度反馈一阶滤波 */
-                motor->PID_Speed.nowValue = omega_mech;
-                motor->PID_Speed.aimValue = omega_mech; /* 主循环会从该值继续向电位器目标爬升 */
-                motor->PID_Speed.Output = CLOSE_LOOP_INIT_IQ;
-                motor->PID_Speed.integral = CLOSE_LOOP_INIT_IQ;
-                /* 角度已由判据保证与开环角一致，无需强制覆盖 PLL 状态，保持观测器内部自洽 */
-                motor->State = MOTOR_RUN;
-            }
-        }
+        MotorState(motor);
+    }
+}
+/**
+ * @brief   电机预定位时设置参数等信息，修改电机运行状态
+ * @param   null
+ * @return  null
+ */
+static void MotorAlignStart(void)
+{
+    Motor_t *motor = GetMotorStruct();
+    g_align_start_tick = HAL_GetTick();
+    motor->State = MOTOR_OPENLOOP_CURRENT_OPEN;
+}
+/**
+ * @brief   电机开环强拖时设置参数等信息，修改电机运行状态
+ * @param   null
+ * @return  null
+ */
+static void MotorOpenLoopStart(void)
+{
+    Motor_t *motor = GetMotorStruct();
+    g_open_theta = ALIGN_ANGLE; /* 从预定位角度继续，角度连续 */
+    g_open_omega = OPENLOOP_OMEGA_START;
+    g_open_start_tick = HAL_GetTick();
+    g_obs_speed_ok_cnt = 0; /* 重置收敛计数，避免残留计数导致立即切换 */
+    g_obs_angle_ok_cnt = 0;
+    motor->State = MOTOR_OPENLOOP_CURRENT_CLOSE;
+}
+static void MotorState(Motor_t *motor)
+{
+    // 校准==>低速强拖==>滑膜观测器
+    switch (motor->State)
+    {
+    case MOTOR_OPENLOOP_CURRENT_OPEN:
+        
         break;
-        case MOTOR_RUN:
-            // 闭环运行状态：完整FOC
-            Clark(motor);
-            ObserverSMO(motor);
-            PLL(motor);
-            Park(motor);
-            PID(motor);
-            AntiPark(motor);
-            SVPWM(motor);
-            SetPWMValue((uint32_t)(motor->PWM.Duty_a * (float)(htim1.Init.Period + 1U)),
-                        (uint32_t)(motor->PWM.Duty_b * ((float)htim1.Init.Period + 1U)),
-                        (uint32_t)(motor->PWM.Duty_c * ((float)htim1.Init.Period + 1U)));
-
-            if (fabsf(motor->PLL.omerga_hat) < RUN_MIN_OMEGA)
-            {
-                if (++g_run_stall_cnt >= RUN_STALL_CNT)
-                {
-                    g_run_stall_cnt = 0;
-                    g_obs_speed_ok_cnt = 0;
-                    MotorOpenLoopStart();   /* 回到强拖：g_open_omega 从低速重新爬升 */
-                }
-            }
-            else
-            {
-                g_run_stall_cnt = 0;
-            }
-            break;
-        case MOTOR_STOP:
-                SetPWMValue(PWM_ARR_ZERO, PWM_ARR_ZERO, PWM_ARR_ZERO);
-            break;
-        default:
-            SetPWMValue(PWM_ARR_ZERO, PWM_ARR_ZERO, PWM_ARR_ZERO);
-            break;
-        }
+    case MOTOR_OPENLOOP_CURRENT_CLOSE:
+        
+        break;
+    case MOTOR_RUN:
+ 
+        break;
+    case MOTOR_STOP:
+        SetPWMValue(PWM_ARR_ZERO, PWM_ARR_ZERO, PWM_ARR_ZERO);
+        break;
+    default:
+        SetPWMValue(PWM_ARR_ZERO, PWM_ARR_ZERO, PWM_ARR_ZERO);
+        break;
     }
 }
 /**************************************parameter Init********************************************/
@@ -374,6 +261,7 @@ void MotorParaInit(Motor_t *motor)
     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
     HAL_TIM_Base_Start_IT(&htim1);
+    HAL_TIM_Base_Start_IT(&htim2);
 }
 /**
  * @brief   电机状态枚举转字符串（串口打印用）
@@ -384,17 +272,22 @@ const char *StateName(State_t state)
 {
     switch (state)
     {
-    case MOTOR_CALIB:    return "CALIB";
-    case MOTOR_ALIGN:    return "ALIGN";
-    case MOTOR_OPENLOOP: return "OPENLOOP";
-    case MOTOR_RUN:      return "RUN";
-    case MOTOR_STOP:     return "STOP";
-    default:             return "ERROR";
+    case MOTOR_OPENLOOP_CURRENT_OPEN:
+        return "Open current";
+    case MOTOR_OPENLOOP_CURRENT_CLOSE:
+        return "Close current";
+    case MOTOR_RUN:
+        return "RUN";
+    case MOTOR_STOP:
+        return "STOP";
+    default:
+        return "ERROR";
     }
 }
+/**主函数中实现 */
 void TxMotorData(Motor_t *motor, Temperature_t *temp)
 {
-     // 数据发送（含调试量：Vd/Vq 电流环输出、Duty_a 占空比、adcA 注入采样原始值、ofA 偏置）
+    // 数据发送（含调试量：Vd/Vq 电流环输出、Duty_a 占空比、adcA 注入采样原始值、ofA 偏置）
     int Tx_buff_len = snprintf(Tx_buffer, sizeof(Tx_buffer),
                                "|St|Aim|Now|Theta|Vbus|Va|Vb|Vc|Vd|Vq|Da|adcA|ofA|:%s,%.1f,%.1f,%.2f,%.1f,%.2f,%.2f,%.2f,%.1f,%.1f,%.3f,%u,%u\n",
                                StateName(motor->State),
@@ -412,24 +305,25 @@ void TxMotorData(Motor_t *motor, Temperature_t *temp)
                                (unsigned int)motor->Current.current_offset_Ia);
     if ((Tx_buff_len > 0) && (Tx_buff_len <= TX_BUFFER_SIZE))
     {
-      printf("%s", Tx_buffer);
+        printf("%s", Tx_buffer);
     }
 }
+/** 放在定时器2中实现，和按键一起 */
 void MotorSpedControl(Motor_t *motor)
 {
     if (HAL_GetTick() - last_tick > 2U)
     {
-      last_tick = HAL_GetTick();
+        last_tick = HAL_GetTick();
 
-      // 电位器目标：0~MOTOR_SEPPD_COEFFICIENT 对应机械角速度(rad/s)。
-      // 除以极对数，与 foc.c 速度环反馈(机械角速度 omerga_hat/POLE_PAIRS)单位一致
-      float target = MOTOR_SEPPD_COEFFICIENT * motor->Current.pot_ratio / (float)MOTOR_POLE_PAIRS;
-      float diff = target - motor->PID_Speed.aimValue;
+        // 电位器目标：0~MOTOR_SEPPD_COEFFICIENT 对应机械角速度(rad/s)。
+        // 除以极对数，与 foc.c 速度环反馈(机械角速度 omerga_hat/POLE_PAIRS)单位一致
+        float target = MOTOR_SEPPD_COEFFICIENT * motor->Current.pot_ratio / (float)MOTOR_POLE_PAIRS;
+        float diff = target - motor->PID_Speed.aimValue;
 
-      if (diff > 0.5f)
-        diff = 0.5f;
-      else if (diff < -0.5f)
-        diff = -0.5f;
-      motor->PID_Speed.aimValue += diff;
+        if (diff > 0.5f)
+            diff = 0.5f;
+        else if (diff < -0.5f)
+            diff = -0.5f;
+        motor->PID_Speed.aimValue += diff;
     }
 }

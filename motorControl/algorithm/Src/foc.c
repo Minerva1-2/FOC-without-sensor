@@ -1,21 +1,17 @@
 #include "foc.h"
 #include "globalControl.h"
-/*****************************函数指针****************************************/
-static void (*__User_Func_PID__)(Motor_t *motor) = NULL;   // PID函数指针
-static void (*__User_Func_SVPWM__)(Motor_t *motor) = NULL; // SVPWM函数指针
 /*****************************速度反馈滤波************************************/
-static float g_omega_mech_filt;      /* 滤波后的机械角速度(rad/s) */
-
+static float g_omega_filt;      /* 滤波后的电角速度(rad/s) */
 /**
  * @fn  void Clark(Motor_t *motor)
  * @brief   make the motor's three phase currents become the two phase currents
  * @param   Motor_t *motor
  * @return  null
  */
-void Clark(Motor_t *motor)
+void Clark(FOC_t *FOC)
 {
-    motor->FOC.I_alpha = motor->FOC.Ia;
-    motor->FOC.I_beta = (motor->FOC.Ia + 2.0f * motor->FOC.Ib) / sqrtf(3.0f);
+    FOC->I_alpha = FOC->Ia;
+    FOC->I_beta = (FOC->Ia + 2.0f * FOC->Ib) / sqrtf(3.0f);
 }
 /**
  * @fn  void Park(Motor_t *motor)
@@ -23,13 +19,13 @@ void Clark(Motor_t *motor)
  * @param   Motor_t *motor
  * @return  null
  */
-void Park(Motor_t *motor)
+void Park(FOC_t *FOC)
 {
-    float sin_angle = sinf(motor->FOC.angle);
-    float cos_angle = cosf(motor->FOC.angle);
+    float sin_angle = sinf(FOC->angle);
+    float cos_angle = cosf(FOC->angle);
 
-    motor->FOC.Id = motor->FOC.I_alpha * cos_angle + motor->FOC.I_beta * sin_angle;
-    motor->FOC.Iq = -(motor->FOC.I_alpha * sin_angle) + motor->FOC.I_beta * cos_angle;
+    FOC->Id = FOC->I_alpha * cos_angle + FOC->I_beta * sin_angle;
+    FOC->Iq = -(FOC->I_alpha * sin_angle) + FOC->I_beta * cos_angle;
 }
 /**
  * @brief  位置式 PID 通用计算
@@ -63,29 +59,17 @@ float PIDCalc(PID_t *pid, float aimValue, float nowValue)
  * @param   Motor_t *motor
  * @return  null
  */
-static void DefaultPID(Motor_t *motor)
+void PID(PID_t * PID, FOC_t *FOC, PLL_t *PLL)
 {
-    /* 电角速度(rad/s) ÷ 极对数 → 机械角速度（注意：用 omerga_hat 角速度，不是 theta_hat 角度） */
-    float omega_mech = motor->PLL.omerga_hat / (float)MOTOR_POLE_PAIRS;
     /* 转速反馈一阶低通：滤掉 SMO 高频噪声，防止速度环输出抖动 */
-    g_omega_mech_filt += SPEED_LPF_ALPHA * (omega_mech - g_omega_mech_filt);
-    motor->PID_Speed.nowValue = g_omega_mech_filt;
+    g_omega_filt += SPEED_LPF_ALPHA * (PLL->omerga_hat - g_omega_filt);
+    PID->nowValue = g_omega_filt;
     /* 速度环（外环）：目标转速 vs 滤波后实际转速 → Iq 目标 */
-    float iq_ref = PIDCalc(&motor->PID_Speed, motor->PID_Speed.aimValue, g_omega_mech_filt);
-    
+    float iq_ref = PIDCalc(PID, PID->aimValue, g_omega_filt);
     /* d 轴电流环：目标 Id = 0 */
-    motor->FOC.Vd = PIDCalc(&motor->PID_Id, 0.0f, motor->FOC.Id);
+    FOC->Vd = PIDCalc(PID, 0.0f, FOC->Id);
     /* q 轴电流环：目标 Iq = 速度环输出 */
-    motor->FOC.Vq = PIDCalc(&motor->PID_Iq, iq_ref, motor->FOC.Iq);
-}
-/**
- * @brief   速度反馈一阶低通滤波初始化（开环→闭环切换时调用，避免滤波从 0 爬升导致速度环误判）
- * @param   float omega_mech  当前机械角速度(rad/s)
- * @return  null
- */
-void SpeedFeedbackFiltInit(float omega_mech)
-{
-    g_omega_mech_filt = omega_mech;
+    FOC->Vq = PIDCalc(PID, iq_ref, FOC->Iq);
 }
 /**
  * @fn  void AntiPark(Motor_t *motor)
@@ -93,30 +77,30 @@ void SpeedFeedbackFiltInit(float omega_mech)
  * @param   Motor_t *motor
  * @return  null
  */
-void AntiPark(Motor_t *motor)
+void AntiPark(FOC_t *FOC)
 {
-    float sin_el = sinf(motor->FOC.angle);
-    float cos_el = cosf(motor->FOC.angle);
+    float sin_el = sinf(FOC->angle);
+    float cos_el = cosf(FOC->angle);
 
-    motor->FOC.V_alpha = motor->FOC.Vd * cos_el - motor->FOC.Vq * sin_el;
-    motor->FOC.V_beta = motor->FOC.Vd * sin_el + motor->FOC.Vq * cos_el;
+    FOC->V_alpha = FOC->Vd * cos_el - FOC->Vq * sin_el;
+    FOC->V_beta = FOC->Vd * sin_el + FOC->Vq * cos_el;
 }
 /**
  * @brief   this code include two SVPWM methods.
  *          defalut method is seven stage SVPWM,if you want to change the method,
  *          please change the SVPWM define in "globalControl.h".
  */
-static void DefaultSVPWM(Motor_t *motor)
+void SVPWM(FOC_t *FOC, Current_t *Current, PWM_t *PWM)
 {
 #if (defined(SVPWM_SECTOR_METHOD))
 
     float T1, T2;
     float Ta, Tb, Tc;
 
-    float V_alpha = motor->FOC.V_alpha;
-    float V_beta = motor->FOC.V_beta;
-    float V_dc = motor->Current.voltage_bus;
-    float Ts = motor->PWM.pwm_period;
+    float V_alpha = FOC->V_alpha;
+    float V_beta = FOC->V_beta;
+    float V_dc = Current->voltage_bus;
+    float Ts = PWM->pwm_period;
 
     float U1 = V_beta;
     float U2 = SQRT3_DIV_TWO * V_alpha - 0.5f * V_beta;
@@ -216,15 +200,15 @@ static void DefaultSVPWM(Motor_t *motor)
         break;
     }
     // duty output
-    motor->PWM.Duty_a = Ta / Ts;
-    motor->PWM.Duty_b = Tb / Ts;
-    motor->PWM.Duty_c = Tc / Ts;
+    PWM->Duty_a = Ta / Ts;
+    PWM->Duty_b = Tb / Ts;
+    PWM->Duty_c = Tc / Ts;
     
 #elif (defined(SVPWM_ZERO_SQUENCE))
     // Anti Clark
-    float Va = motor->FOC.V_alpha;
-    float Vb = -0.5f * motor->FOC.V_alpha + SQRT3_DIV_TWO * motor->FOC.V_beta;
-    float Vc = -0.5f * motor->FOC.V_alpha - SQRT3_DIV_TWO * motor->FOC.V_beta;
+    float Va = FOC->V_alpha;
+    float Vb = -0.5f * FOC->V_alpha + SQRT3_DIV_TWO * FOC->V_beta;
+    float Vc = -0.5f * FOC->V_alpha - SQRT3_DIV_TWO * FOC->V_beta;
     // find max and min vlotage
     float Vmax = Va;
     if (Vb > Vmax)
@@ -247,12 +231,12 @@ static void DefaultSVPWM(Motor_t *motor)
     float V_peak = (Vmax - Vmin) * 0.5f;
     /* 过调制限制：零序注入后调制波峰值必须 ≤ Vbus/2（Duty=0.5+Va'/Vbus ∈ [0,1]）。
        原用 Vbus/√3(0.577Vbus) 偏大，限幅后 Duty 仍可达 1.077，被 _constrain 削顶畸变 */
-    float vbus = motor->Current.voltage_bus;
+    float vbus = Current->voltage_bus;
     if (vbus <= 0.0f) /* 母线采样异常保护：输出零矢量（50%），避免除零后全压输出 */
     {
-        motor->PWM.Duty_a = 0.5f;
-        motor->PWM.Duty_b = 0.5f;
-        motor->PWM.Duty_c = 0.5f;
+        PWM->Duty_a = 0.5f;
+        PWM->Duty_b = 0.5f;
+        PWM->Duty_c = 0.5f;
         
         return;
     }
@@ -267,9 +251,9 @@ static void DefaultSVPWM(Motor_t *motor)
         Vc *= scale;
     }
 
-    motor->FOC.Va = Va;
-    motor->FOC.Vb = Vb;
-    motor->FOC.Vc = Vc;
+    FOC->Va = Va;
+    FOC->Vb = Vb;
+    FOC->Vc = Vc;
 
     float duty_a = 0.5f + Va / vbus;
     float duty_b = 0.5f + Vb / vbus;
@@ -278,53 +262,8 @@ static void DefaultSVPWM(Motor_t *motor)
        过调制饱和到 100%/0% 时该相下桥臂恒关断/恒开通，000 采样窗口消失，
        低边电流采样采不到 → 电流环/SMO/PLL 反馈全乱（现象：电流±9A 跳变、角度乱跳）。
        限制最大占空比保证每个 PWM 周期都存在 000 矢量采样窗口 */
-    motor->PWM.Duty_a = _constrain(duty_a, 0.92f, 0.02f);
-    motor->PWM.Duty_b = _constrain(duty_b, 0.92f, 0.02f);
-    motor->PWM.Duty_c = _constrain(duty_c, 0.92f, 0.02f);
+    PWM->Duty_a = _constrain(duty_a, 0.92f, 0.02f);
+    PWM->Duty_b = _constrain(duty_b, 0.92f, 0.02f);
+    PWM->Duty_c = _constrain(duty_c, 0.92f, 0.02f);
 #endif
-}
-/**
- * @brief   实现用户自定义PID函数与默认函数的切换
- * @param   Motor_t *motor
- * @return  null
- */
-void PID(Motor_t *motor)
-{
-    // PID函数指定
-    if (__User_Func_PID__ != NULL)
-    {
-        __User_Func_PID__(motor);
-    }
-    else
-    {
-        __User_Func_PID__ = DefaultPID;
-    }
-}
-/**
- * @brief   实现用户自定义函数与默认函数的切换
- * @param   Motor_t *motor
- * @return  null
- */
-void SVPWM(Motor_t *motor)
-{
-    // SVPWM函数指定
-    if (__User_Func_SVPWM__ != NULL)
-    {
-        __User_Func_SVPWM__(motor);
-    }
-    else
-    {
-        __User_Func_SVPWM__ = DefaultSVPWM;
-    }
-}
-/**
- * @brief   实现用户自定义函数注册
- * @param   void (*UserFuncSVPWM)(Motor_t *motor)
- * @return  null
- */
-void FuncRegister(void (*UserFuncPID)(Motor_t *motor),
-                  void (*UserFuncSVPWM)(Motor_t *motor))
-{
-    __User_Func_PID__ = UserFuncPID;
-    __User_Func_SVPWM__ = UserFuncSVPWM;
 }

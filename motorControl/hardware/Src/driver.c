@@ -1,116 +1,11 @@
 #include "driver.h"
-
-/* ==================== 按键状态机实现 ==================== */
-static Key_t g_key1; /* KEY1(PC9) 状态机实例 */
-static Key_t g_key2; /* KEY2(PB12) 状态机实例 */
-
-/**
- * @brief  按键状态机扫描，需以固定节拍周期调用（本工程在 SysTick 1ms 中断中调用）
- * @param  key:  按键状态机实例
- * @param  port: 按键所在 GPIO 端口
- * @param  pin:  按键引脚
- */
-void KeyScan(Key_t *key, GPIO_TypeDef *port, uint16_t pin)
-{
-    uint8_t level = (HAL_GPIO_ReadPin(port, pin) == GPIO_PIN_SET) ? 1U : 0U;
-
-    switch (key->state)
-    {
-    case KEY_STATE_IDLE:
-        if (level == KEY_PRESS_LEVEL) /* 检测到按下 */
-        {
-            key->state = KEY_STATE_PRESS_DEBOUNCE;
-            key->debounce_cnt = 0U;
-        }
-        break;
-
-    case KEY_STATE_PRESS_DEBOUNCE:
-        if (level == KEY_PRESS_LEVEL)
-        {
-            if (++key->debounce_cnt >= KEY_DEBOUNCE_CNT) /* 连续 20ms 为按下才确认 */
-            {
-                key->state = KEY_STATE_PRESSED;
-                key->pressed_event = 1U; /* 产生按下事件 */
-            }
-        }
-        else
-        {
-            key->state = KEY_STATE_IDLE; /* 抖动，回到空闲 */
-            key->debounce_cnt = 0U;
-        }
-        break;
-
-    case KEY_STATE_PRESSED:
-        key->state = KEY_STATE_HOLD; /* 事件已发出，进入按住态 */
-        break;
-
-    case KEY_STATE_HOLD:
-        if (level != KEY_PRESS_LEVEL) /* 检测到松开 */
-        {
-            key->state = KEY_STATE_RELEASE_DEBOUNCE;
-            key->debounce_cnt = 0U;
-        }
-        break;
-
-    case KEY_STATE_RELEASE_DEBOUNCE:
-        if (level != KEY_PRESS_LEVEL)
-        {
-            if (++key->debounce_cnt >= KEY_DEBOUNCE_CNT)
-            {
-                key->state = KEY_STATE_IDLE; /* 确认释放，回到空闲 */
-            }
-        }
-        else
-        {
-            key->state = KEY_STATE_HOLD; /* 又按下，回到按住 */
-            key->debounce_cnt = 0U;
-        }
-        break;
-
-    default:
-        key->state = KEY_STATE_IDLE;
-        break;
-    }
-}
-static uint8_t KeyPressed(Key_t *key)
-{
-    uint8_t evt = key->pressed_event;
-    key->pressed_event = 0U;
-    return evt;
-}
-void KeyEventHandler(Motor_t *motor)
-{
-    if (KeyPressed(&g_key1))
-    {
-        if (motor->State == MOTOR_RUN)
-        {
-            motor->State = MOTOR_STOP;
-            MotorDriverDisable();
-        }
-        else if (motor->State == MOTOR_STOP)
-        {
-            MotorDriverEnable();
-            MotorAlignStart();
-        }
-    }
-
-    if (KeyPressed(&g_key2))
-    {
-        /* KEY2 预留：速度档位切换等 */
-    }
-}
-void KeyScanIsr(void) /* SysTick 1ms 调用，只扫不处理 */
-{
-    KeyScan(&g_key1, KEY1_GPIO_Port, KEY1_Pin);
-    // KeyScan(&g_key2, KEY2_GPIO_Port, KEY2_Pin);
-}
 /**
  * @fn  void MotorDriverEnable(void)
  * @brief   EG2104 enable
  * @param   null
  * @return  null
  */
-void MotorDriverEnable(void)
+static void MotorDriverEnable(void)
 {
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_SET); // A
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_SET); // B
@@ -122,33 +17,33 @@ void MotorDriverEnable(void)
  * @param   null
  * @return  null
  */
-void MotorDriverDisable(void)
+static void MotorDriverDisable(void)
 {
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);
 }
 /**
- * @fn  void LedON(Motor_t *motor)
+ * @fn  void LedControl(State_t state)
  * @brief   R:PC15, G:PC14, B:PC13; 0:Led on, 1:Led off
- * @param   Motor_t *motor
+ * @param   State_t state
  * @return  null
  */
-void LedControl(Motor_t *motor)
+static void LedControl(State_t state)
 {
-    if (motor->State == MOTOR_RUN)
+    if (state == MOTOR_RUN)
     {
         HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET); // ALL
         HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, GPIO_PIN_RESET);
         HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, GPIO_PIN_RESET);
     }
-    else if (motor->State == MOTOR_ALIGN)
+    else if (state == MOTOR_OPENLOOP_CURRENT_OPEN)
     {
         HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET); // Blue
         HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, GPIO_PIN_SET);
         HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, GPIO_PIN_SET);
     }
-    else if (motor->State == MOTOR_OPENLOOP)
+    else if (state == MOTOR_OPENLOOP_CURRENT_CLOSE)
     {
         HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, GPIO_PIN_RESET); // Green
         HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
@@ -161,3 +56,29 @@ void LedControl(Motor_t *motor)
         HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, GPIO_PIN_SET);
     }
 }
+/**
+ * @brief   设置PWM占空比
+ * @param   uint32_t PWMValue_A, uint32_t PWMValue_B, uint32_t PWMValue_C
+ * @return  null
+ */
+static void SetPWMValue(uint32_t PWMValue_A, uint32_t PWMValue_B, uint32_t PWMValue_C)
+{
+    /* 占空比限幅到 [0, Period+1]，防止 CCR 溢出导致 100% 输出（恒吸） */
+    uint32_t period = (uint32_t)htim1.Init.Period + 1U;
+    if (PWMValue_A > period)
+        PWMValue_A = period;
+    if (PWMValue_B > period)
+        PWMValue_B = period;
+    if (PWMValue_C > period)
+        PWMValue_C = period;
+
+    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, PWMValue_A);
+    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, PWMValue_B);
+    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, PWMValue_C);
+}
+const Driver_t Driver = {
+    .MotorDriverEnable = MotorDriverEnable,
+    .MotorDriverEnable = MotorDriverDisable,
+    .LEDControl = LedControl,
+    .SetPWMValue = SetPWMValue,
+};

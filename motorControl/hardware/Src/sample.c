@@ -22,7 +22,7 @@ static uint16_t g_current_sample_num;
 void GetOffsetCurrent(Motor_t *motor)
 {
     /* 仅在偏置校准(MOTOR_CALIB)或停机(MOTOR_STOP)状态下采集零电流偏置 */
-    if ((motor->State != MOTOR_STOP) && (motor->State != MOTOR_CALIB))
+    if (motor->State != MOTOR_STOP)
         return;
     if (motor->Current.g_current_offset_state)
         return;

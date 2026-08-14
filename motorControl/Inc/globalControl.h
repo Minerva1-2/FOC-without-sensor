@@ -40,7 +40,6 @@
 #define BUS_UNDERVOLTAGE_THRESHOLD  (12.0f)          /* V，24V 电源拉低一半即判欠压 */
 #define BUS_UNDERVOLTAGE_CNT        (100U)           /* 5ms 持续确认，抗启动/切换瞬态 */
 
-void MotorAlignStart(void);
 void TemperatureInit(Temperature_t *temp);
 void MotorParaInit(Motor_t *motor);
 const char *StateName(State_t state);
