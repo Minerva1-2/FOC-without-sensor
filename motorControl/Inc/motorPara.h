@@ -157,14 +157,6 @@ typedef struct
 
 extern const g_MotorInterface_t g_API_Interface;
 
-// State_t *GetStateStruct(void);
-// Error_t *GetErrorStruct(void);
-// PID_t *GetPIDIdStruct(void);
-// PID_t *GetPIDIqStruct(void);
-// FOC_t *GetFOCStruct(void);
-// SMO_t *GetSMOStruct(void);
-// PLL_t *GetPLLStruct(void) ;
-// Current_t *GetCurrentStruct(void);
 Temperature_t *GetTempStruct(void);
 Motor_t *GetMotorStruct(void);
 
