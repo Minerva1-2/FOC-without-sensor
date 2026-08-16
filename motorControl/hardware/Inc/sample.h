@@ -21,10 +21,6 @@
 #define K_TEMPERATURE           (273.15f)       // 开式温度
 #define TEMP_SAMPLE_NUM         (1000U)         // 温度计算节流：约每 1000 次 ADC 完成回调算一次
 
-void GetOffsetCurrent(Motor_t *motor);
-float GetPhaseCurrent(Motor_t *motor, uint8_t phase);
-float GetVoltageBus(Motor_t *motor);
-void GetTempture(Temperature_t *temp);
-float GetPwmPeriod(void);
+void __PWM_Register__(g_MotorInterface_t *g_API_Interface);
 
 #endif

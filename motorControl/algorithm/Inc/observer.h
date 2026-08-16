@@ -11,7 +11,5 @@
 #define PLL_E_MIN_SQ    (0.25f)
 #define SMO_LPF_ALPHA   (0.1f)
 
-void ObserverSMO(Motor_t *motor);
-void PLL(Motor_t *motor);
-
+void __PWM_Register__(g_MotorInterface_t *g_API_Interface);
 #endif

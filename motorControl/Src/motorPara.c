@@ -1,43 +1,55 @@
+#include <string.h>
 #include "motorPara.h"
 
-static PID_t pid = {0};
-static FOC_t foc = {0};
-static SMO_t smo = {0};
-static PLL_t pll = {0};
-static Current_t current = {0};
-static PWM_t pwm = {0};
-static Temperature_t temp = {0};
-static Motor_t motor = {0};
+static Temperature_t *temperature = {0};
+static Motor_t *motor = {0};
 
-PID_t *GetPIDStruct(void)
+State_t *GetStateStruct(void)
 {
-    return &pid;
+    return &motor->State;
+}
+Error_t *GetErrorStruct(void)
+{
+    return &motor->Error;
+} 
+PID_t *GetPIDIdStruct(void)
+{
+    return &motor->PID_Id;
+}
+PID_t *GetPIDIqStruct(void)
+{
+    return &motor->PID_Iq;
 }
 FOC_t *GetFOCStruct(void)
 {
-    return &foc;
-}
+    return &motor->FOC;
+} 
 SMO_t *GetSMOStruct(void)
 {
-    return &smo;
+    return &motor->SMO;
 }
 PLL_t *GetPLLStruct(void)
 {
-    return &pll;
-}
+    return &motor->PLL;
+} 
 Current_t *GetCurrentStruct(void)
 {
-    return &current;
+    return &motor->Current;
 }
-PWM_t *GetPWMStruct(void)
+Temperature_t *GetTempStruct(void)
 {
-    return &pwm;
-}
-Temperature_t *GetTemperatureStruct(void)
-{
-    return &temp;
-}
+    return temperature;
+} 
+
 Motor_t *GetMotorStruct(void)
 {
-    return &motor;
-}
+    return motor;
+} 
+
+const g_MotorInterface_t g_Interface_API = {
+    .Driver = NULL,
+    .FOC = NULL,
+    .Observer = NULL,
+    .Sample = NULL,
+};
+

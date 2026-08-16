@@ -1,3 +1,11 @@
+/*
+ * @Author: Minerva1-2 18993035310@163.com
+ * @Date: 2026-08-15 10:58:38
+ * @LastEditors: Minerva1-2 18993035310@163.com
+ * @LastEditTime: 2026-08-15 10:59:51
+ * @FilePath: \MDK-ARMd:\cubemx\project\keil\FOC-without-sensor\motorControl\hardware\Src\driver.c
+ * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
+ */
 #include "driver.h"
 /**
  * @fn  void MotorDriverEnable(void)
@@ -76,9 +84,15 @@ static void SetPWMValue(uint32_t PWMValue_A, uint32_t PWMValue_B, uint32_t PWMVa
     __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, PWMValue_B);
     __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, PWMValue_C);
 }
-const Driver_t Driver = {
+static API_Driver_t DriverInterface = {
     .MotorDriverEnable = MotorDriverEnable,
-    .MotorDriverEnable = MotorDriverDisable,
-    .LEDControl = LedControl,
+    .MotorDriverDisable = MotorDriverDisable,
+    .LedControl = LedControl,
     .SetPWMValue = SetPWMValue,
 };
+
+void __PWM_Register__(g_MotorInterface_t *g_API_Interface)
+{
+    if (g_API_Interface != NULL)
+        g_API_Interface->Driver = &DriverInterface;
+}

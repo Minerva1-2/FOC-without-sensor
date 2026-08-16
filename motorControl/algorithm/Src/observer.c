@@ -12,10 +12,10 @@
  * @param   smo: 观测器状态；foc: 电压(输入)/电流(反馈)；pwm_period: 控制周期(s)
  * @return  null
  */
-void ObserverSMO(Motor_t *motor)
+static void ObserverSMO(Motor_t *motor)
 {
     // 电流误差
-    float Ts = motor->PWM.pwm_period;
+    float Ts = motor->pwm_period;
     float R_over_L = MOTOR_PHASE_R / MOTOR_PHASE_L;
     float inv_L = 1.0f / MOTOR_PHASE_L;
     // current observer
@@ -41,7 +41,7 @@ void ObserverSMO(Motor_t *motor)
  * @param   pll: PLL 状态；smo: 反电动势输入；foc: 输出角度写入 motor->FOC.angle；pwm_period: 控制周期(s)
  * @return  null
  */
-void PLL(Motor_t *motor)
+static void PLL(Motor_t *motor)
 {
     float e_alpha = motor->SMO.e_alpha_hat;
     float e_beta = motor->SMO.e_beta_hat;
@@ -52,7 +52,7 @@ void PLL(Motor_t *motor)
         // get the theta error when the angle more than 5 angle
         motor->PLL.theta_error = (-e_alpha * cosf(motor->PLL.theta_hat) - e_beta * sinf(motor->PLL.theta_hat)) / E;
 
-        motor->PLL.integral += motor->PLL.i * motor->PLL.theta_error * motor->PWM.pwm_period;
+        motor->PLL.integral += motor->PLL.i * motor->PLL.theta_error * motor->pwm_period;
         motor->PLL.integral = _constrain(motor->PLL.integral, OMEGA_MAX, -OMEGA_MAX);
         motor->PLL.omerga_hat = motor->PLL.p * motor->PLL.theta_error +motor->PLL.integral;
         motor->PLL.omerga_hat = _constrain(motor->PLL.omerga_hat, OMEGA_MAX, -OMEGA_MAX);
@@ -63,7 +63,7 @@ void PLL(Motor_t *motor)
         motor->PLL.theta_error = 0.0f;
     }
     // get estimation angle
-    motor->PLL.theta_hat += motor->PLL.omerga_hat * motor->PWM.pwm_period;
+    motor->PLL.theta_hat += motor->PLL.omerga_hat * motor->pwm_period;
     // Angle normalization
     if (motor->PLL.theta_hat > PI)
         motor->PLL.theta_hat -= TWO_PI;
@@ -71,4 +71,15 @@ void PLL(Motor_t *motor)
         motor->PLL.theta_hat += TWO_PI;
     // output estimation angle
     motor->FOC.angle = motor->PLL.theta_hat;
+}
+
+static API_Observer_t ObserverInterface = {
+    .ObserverSMO = ObserverSMO,
+    .PLL = PLL,
+};
+
+void __PWM_Register__(g_MotorInterface_t *g_API_Interface)
+{
+    if (g_API_Interface != NULL)
+        g_API_Interface->Observer = &ObserverInterface;
 }

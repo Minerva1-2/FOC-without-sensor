@@ -1,5 +1,5 @@
 #include "key.h"
-
+#include "driver.h"
 /* ==================== 按键状态机实现 ==================== */
 static Key_t g_key1; /* KEY1(PC9) 状态机实例 */
 static Key_t g_key2; /* KEY2(PB12) 状态机实例 */
@@ -77,27 +77,6 @@ static uint8_t KeyPressed(Key_t *key)
     uint8_t evt = key->pressed_event;
     key->pressed_event = 0U;
     return evt;
-}
-
-void KeyEventHandler(Motor_t *motor)
-{
-    if (KeyPressed(&g_key1))
-    {
-        if (motor->State == MOTOR_RUN)
-        {
-            motor->State = MOTOR_STOP;
-            MotorDriverDisable();
-        }
-        else if (motor->State == MOTOR_STOP)
-        {
-            MotorDriverEnable();
-        }
-    }
-
-    if (KeyPressed(&g_key2))
-    {
-        /* KEY2 预留：速度档位切换等 */
-    }
 }
 void KeyScanIsr(void) /* SysTick 1ms 调用，只扫不处理 */
 {

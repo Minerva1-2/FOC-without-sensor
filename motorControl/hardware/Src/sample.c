@@ -19,28 +19,25 @@ static uint16_t g_current_sample_num;
  * @return  null
  * @brief   get the offset voltage when the motor is static
  */
-void GetOffsetCurrent(Motor_t *motor)
+static void GetOffsetCurrent(Current_t *Current)
 {
-    /* 仅在偏置校准(MOTOR_CALIB)或停机(MOTOR_STOP)状态下采集零电流偏置 */
-    if (motor->State != MOTOR_STOP)
-        return;
-    if (motor->Current.g_current_offset_state)
+    if (Current->g_current_offset_state)
         return;
 
-	g_offset_Ia += motor->Current.current_adc_a;
-    g_offset_Ic += motor->Current.current_adc_c;
+	g_offset_Ia += Current->current_adc_a;
+    g_offset_Ic += Current->current_adc_c;
 
     g_current_sample_num++;
 
     if (g_current_sample_num >= CURRENT_SAMPLE_NUM)
     {
-        motor->Current.current_offset_Ia = (float)g_offset_Ia / (float)CURRENT_SAMPLE_NUM;
-        motor->Current.current_offset_Ic = (float)g_offset_Ic / (float)CURRENT_SAMPLE_NUM;
+        Current->current_offset_Ia = (float)g_offset_Ia / (float)CURRENT_SAMPLE_NUM;
+        Current->current_offset_Ic = (float)g_offset_Ic / (float)CURRENT_SAMPLE_NUM;
     
         g_current_sample_num = 0;
         g_offset_Ia = MOTOR_PARA_RESET;
         g_offset_Ic = MOTOR_PARA_RESET;
-        motor->Current.g_current_offset_state = true;
+        Current->g_current_offset_state = true;
     }
 }
 /**
@@ -49,20 +46,20 @@ void GetOffsetCurrent(Motor_t *motor)
  * @return  voltage / (CURRENT_AMP_GAIN * CURRENT_SHUNT_OHM)
  * @brief   this function gather real phase current when the motor is running
  */
-float GetPhaseCurrent(Motor_t *motor, uint8_t phase_flag)
+static float GetPhaseCurrent(Current_t *Current, uint8_t phase_flag)
 {
     uint16_t adc = 0;
     float offset_voltage = 0.0f;
 
     if (0U == phase_flag)
     {
-        offset_voltage = motor->Current.current_offset_Ia;
-        adc = motor->Current.current_adc_a;
+        offset_voltage = Current->current_offset_Ia;
+        adc = Current->current_adc_a;
     }
     else if (1U == phase_flag)
     {
-        offset_voltage = motor->Current.current_offset_Ic;
-        adc = motor->Current.current_adc_c;
+        offset_voltage = Current->current_offset_Ic;
+        adc = Current->current_adc_c;
     }
     else {
         return MOTOR_PARA_RESET;
@@ -72,19 +69,19 @@ float GetPhaseCurrent(Motor_t *motor, uint8_t phase_flag)
     
     return (voltage / (CURRENT_AMP_GAIN * CURRENT_SHUNT_OHM));
 }
-float GetVoltageBus(Motor_t *motor)
+static float GetVoltageBus(Current_t *Current)
 {
-    float v_adc = motor->Current.adc_bus * ADC_REF_VOLTAGE / ADC_FULL_SCALE;
+    float v_adc = Current->adc_bus * ADC_REF_VOLTAGE / ADC_FULL_SCALE;
     
     return v_adc / VBUS_DIV_RATIO;
 }
-void GetTempture(Temperature_t *temp)
+static void GetTempture(Temperature_t *temp)
 {
     temp->curr_resistor = temp->resistor_other * (ADC_FULL_SCALE - temp->adc_value) / temp->adc_value;
     temp->ln_value = logf(temp->curr_resistor / temp->resistor_ref);
     temp->curr_temp = 1.0f / (1.0f / temp->temperature_ref + 1.0f / temp->B_value * temp->ln_value) - K_TEMPERATURE;
 }
-float GetPwmPeriod(void)
+static float GetPwmPeriod(void)
 {
     uint32_t pclk2 = HAL_RCC_GetPCLK2Freq();
     uint32_t tim_clk = pclk2;
@@ -99,4 +96,17 @@ float GetPwmPeriod(void)
                             / (float)tim_clk;
     /* ×(RCR+1) 得到实际更新事件周期 = FOC 执行节拍 */
     return pwm_period * (float)(htim1.Init.RepetitionCounter + 1U);
+}
+static API_Sample_t SampleInterface = {
+    .GetOffsetCurrent = GetOffsetCurrent,
+    .GetPhaseCurrent = GetPhaseCurrent,
+    .GetPwmPeriod = GetPwmPeriod,
+    .GetTempture = GetTempture,
+    .GetVoltageBus = GetVoltageBus,
+};
+
+void __PWM_Register__(g_MotorInterface_t *g_API_Interface)
+{
+    if (g_API_Interface != NULL)
+        g_API_Interface->Sample = &SampleInterface;
 }

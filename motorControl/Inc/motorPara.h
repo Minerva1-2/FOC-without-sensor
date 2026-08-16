@@ -9,12 +9,9 @@
 #define MOTOR_POLE_PAIRS    (7U)
 #define MOTOR_PHASE_R       (0.206f)
 #define MOTOR_PHASE_L       (0.000046f)
-
-/**
- * @brief   电机参数结构体
- * @attention   该结构体只可在中断中写入，其他任何文件中都为只读状态，即该结构体
- *              为单一写入口、多读出口结构体，防止参数被多处修改
- *  */
+/**********************************************************************************************************/
+/*******************************************电机结构体******************************************************/
+/**********************************************************************************************************/
 typedef enum 
 {
     MOTOR_OPENLOOP_CURRENT_OPEN,        /* 开环强拖：速度、电流开环 */   
@@ -54,6 +51,9 @@ typedef struct
     float Iq, Id;                                   // park变换后的数值
     float Vq, Vd;
     float angle;                                    // 电角度
+    float DutyCycleA;                                   // 占空比数值
+    float DutyCycleB;
+    float DutyCycleC;
 } FOC_t;
 typedef struct
 {
@@ -88,13 +88,6 @@ typedef struct
 }Current_t;
 typedef struct
 {
-    float Duty_a;                                   // 占空比数值
-    float Duty_b;
-    float Duty_c;
-    float pwm_period;                               // PWM运行时间
-}PWM_t;
-typedef struct
-{
     uint16_t adc_value;                             // adc采样数据
     float B_value;                                  // B值
     float temperature_ref;                          // 参考温度值
@@ -107,6 +100,8 @@ typedef struct
 /* 电机结构体 */
 typedef struct 
 {
+    float pwm_period;                               // PWM运行时间
+
     State_t State;
     Error_t Error;
     Current_t Current;
@@ -116,16 +111,61 @@ typedef struct
     FOC_t FOC;
     SMO_t SMO;
     PLL_t PLL;
-    PWM_t PWM;
 }Motor_t;
+/*************************************************************************************************************/
+/************************************************函数接口表****************************************************/
+/*************************************************************************************************************/
+typedef struct
+{
+    void (*MotorDriverEnable)(void);
+    void (*MotorDriverDisable)(void);
+    void (*LedControl)(State_t state);
+    void (*SetPWMValue)(uint32_t PWMValue_A, uint32_t PWMValue_B, uint32_t PWMValue_C);
+}API_Driver_t;
 
-PID_t *GetPIDStruct(void);
-FOC_t *GetFOCStruct(void);
-SMO_t *GetSMOStruct(void);
-PLL_t *GetPLLStruct(void);
-Current_t *GetCurrentStruc(void);
-PWM_t *GetPWMStruct(void);
-Temperature_t *GetTemperatureStruct(void);
+typedef struct
+{
+    void (*Clark)(FOC_t *FOC);
+    void (*Park)(FOC_t *FOC);
+    void (*PID)(PID_t * PID, FOC_t *FOC, PLL_t *PLL);
+    void (*AntiPark)(FOC_t *FOC);
+    void (*SVPWM)(FOC_t *FOC, Current_t *Current);
+}API_FOC_t;
+
+typedef struct
+{
+    void (*ObserverSMO)(Motor_t *motor);
+    void (*PLL)(Motor_t *motor);
+}API_Observer_t;
+
+typedef struct
+{
+    void (*GetOffsetCurrent)(Current_t *Current);
+    float (*GetPhaseCurrent)(Current_t *Current, uint8_t phase_flag);
+    float (*GetVoltageBus)(Current_t *Current);
+    void (*GetTempture)(Temperature_t *temp);
+    float (*GetPwmPeriod)(void);
+}API_Sample_t;
+
+typedef struct
+{
+    API_Driver_t *Driver;
+    API_FOC_t *FOC;
+    API_Observer_t *Observer;
+    API_Sample_t *Sample;
+}g_MotorInterface_t;
+
+extern const g_MotorInterface_t g_API_Interface;
+
+// State_t *GetStateStruct(void);
+// Error_t *GetErrorStruct(void);
+// PID_t *GetPIDIdStruct(void);
+// PID_t *GetPIDIqStruct(void);
+// FOC_t *GetFOCStruct(void);
+// SMO_t *GetSMOStruct(void);
+// PLL_t *GetPLLStruct(void) ;
+// Current_t *GetCurrentStruct(void);
+Temperature_t *GetTempStruct(void);
 Motor_t *GetMotorStruct(void);
 
 #endif

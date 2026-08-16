@@ -1,4 +1,5 @@
 #include "globalControl.h"
+#include "motorPara.h"
 #include "sample.h"
 #include "foc.h"
 #include "tim.h"
@@ -33,25 +34,15 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
     if (hadc->Instance == ADC2)
     {
         Motor_t *motor = GetMotorStruct();
-        Temperature_t *temp = GetTemperatureStruct();
+        Temperature_t *temp = GetTempStruct();
 
         /*母线电压 */
         motor->Current.adc_bus = g_adc_buf[0];
-        motor->Current.voltage_bus = GetVoltageBus(motor);
         /*波轮电位器 */
         motor->Current.adc_postion = g_adc_buf[1];
         motor->Current.pot_ratio = (float)g_adc_buf[1] / ADC_FULL_SCALE;
         /*温度（节流计算，避免中断里频繁执行 logf） */
         temp->adc_value = g_adc_buf[2];
-        if (++g_temp_sample_cnt >= TEMP_SAMPLE_NUM)
-        {
-            g_temp_sample_cnt = 0;
-            /* 除零保护：adc_value 为 0（断路）或满量程（短路）时跳过 */
-            if ((temp->adc_value > 0U) && (temp->adc_value < (uint16_t)ADC_FULL_SCALE))
-            {
-                GetTempture(temp);
-            }
-        }
     }
 }
 /**
@@ -70,8 +61,8 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
         motor->Current.current_adc_a = HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_1);
         motor->Current.current_adc_c = HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_2);
         // 获取三相电流
-        motor->FOC.Ia = GetPhaseCurrent(motor, CURRENT_FLAG_Ia);
-        motor->FOC.Ic = GetPhaseCurrent(motor, CURRENT_FLAG_Ic);
+        motor->FOC.Ia = g_API_Interface.Sample->GetPhaseCurrent(motor->Current, CURRENT_FLAG_Ia);
+        motor->FOC.Ic = g_API_Interface.Sample->GetPhaseCurrent(motor->Current, CURRENT_FLAG_Ic);
         motor->FOC.Ib = -motor->FOC.Ia - motor->FOC.Ic;
         // 电流环输出限幅随母线电压动态更新（参照盛浩板：±Vbus/√3，防止过调制）
         float v_limit = motor->Current.voltage_bus * ONE_DIV_SQRT3;
@@ -137,10 +128,12 @@ static void MotorState(Motor_t *motor)
  
         break;
     case MOTOR_STOP:
-        SetPWMValue(PWM_ARR_ZERO, PWM_ARR_ZERO, PWM_ARR_ZERO);
+        g_API_Interface.Driver->SetPWMValue(PWM_ARR_ZERO, PWM_ARR_ZERO, PWM_ARR_ZERO);
+        g_API_Interface.Driver->MotorDriverDisable;
         break;
     default:
-        SetPWMValue(PWM_ARR_ZERO, PWM_ARR_ZERO, PWM_ARR_ZERO);
+        g_API_Interface.Driver->SetPWMValue(PWM_ARR_ZERO, PWM_ARR_ZERO, PWM_ARR_ZERO);
+        g_API_Interface.Driver->MotorDriverDisable;
         break;
     }
 }
@@ -179,6 +172,7 @@ void TemperatureInit(Temperature_t *temp)
  */
 void MotorParaInit(Motor_t *motor)
 {
+    motor->pwm_period = GetPwmPeriod();
     // current parameter init
     motor->Current.adc_bus = 0.0f;
     motor->Current.current_adc_a = 0.0f;
@@ -205,6 +199,9 @@ void MotorParaInit(Motor_t *motor)
     motor->FOC.Vd = 0.0f;
     motor->FOC.Vq = 0.0f;
     motor->FOC.angle = 0.0f;
+    motor->FOC.DutyCycleA = 0.0f;
+    motor->FOC.DutyCycleB = 0.0f;
+    motor->FOC.DutyCycleC = 0.0f;
     /* 速度环：带宽约 10~30 rad/s，输出限幅 = 允许的峰值电流(A) */
     motor->PID_Speed.p = 0.05f;
     motor->PID_Speed.i = 0.001f;
@@ -243,11 +240,6 @@ void MotorParaInit(Motor_t *motor)
     motor->SMO.I_beta_hat = 0.0f;
     motor->SMO.K_slide = 14.0f;
     motor->SMO.wc = 1000.0f;
-    // pwm parameter init
-    motor->PWM.Duty_a = 0.0f;
-    motor->PWM.Duty_b = 0.0f;
-    motor->PWM.Duty_c = 0.0f;
-    motor->PWM.pwm_period = GetPwmPeriod();
 
     motor->State = MOTOR_STOP;
 
@@ -300,7 +292,7 @@ void TxMotorData(Motor_t *motor, Temperature_t *temp)
                                motor->FOC.Vc,
                                motor->FOC.Vd,
                                motor->FOC.Vq,
-                               motor->PWM.Duty_a,
+                               motor->FOC.DutyCycleA,
                                motor->Current.current_adc_a,
                                (unsigned int)motor->Current.current_offset_Ia);
     if ((Tx_buff_len > 0) && (Tx_buff_len <= TX_BUFFER_SIZE))
