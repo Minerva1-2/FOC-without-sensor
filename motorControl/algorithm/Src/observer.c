@@ -7,7 +7,6 @@
  */
 #include "observer.h"
 /**
- * @fn  void ObserverSMO(SMO_t *smo, FOC_t *foc, float pwm_period)
  * @brief   get esimation counter electromotive force
  * @param   smo: 观测器状态；foc: 电压(输入)/电流(反馈)；pwm_period: 控制周期(s)
  * @return  null
@@ -36,7 +35,6 @@ static void ObserverSMO(Motor_t *motor)
     motor->SMO.e_beta_hat += SMO_LPF_ALPHA * (sgn_b - motor->SMO.e_beta_hat);
 }
 /**
- * @fn  void PLL(PLL_t *pll, SMO_t *smo, FOC_t *foc, float pwm_period)
  * @brief   get esimation angle
  * @param   pll: PLL 状态；smo: 反电动势输入；foc: 输出角度写入 motor->FOC.angle；pwm_period: 控制周期(s)
  * @return  null
@@ -72,14 +70,46 @@ static void PLL(Motor_t *motor)
     // output estimation angle
     motor->FOC.angle = motor->PLL.theta_hat;
 }
+/**
+ * @brief   电角度发生器：开环角速度斜坡 + 角度积分
+ * @param   Motor_t *motor
+ * @return  null
+ * @note    角速度口径：电气 rpm（omega_end 可直接接 TAccDec.SpeedOut）；
+ *          角度为标幺值 theta_pu(0~1)，输出时 ×2π 转 rad 给 FOC。
+ */
+static void EAngle_Update(Motor_t *motor)
+{
+    /* 1) 角速度梯形斜坡（电气 rpm 口径，每周期步长 = accel × Ts） */
+    float step = motor->EAngle.accel * motor->pwm_period;
+    float err = motor->EAngle.omega_end - motor->EAngle.omega;
 
+    if (err > step)
+         motor->EAngle.omega += step;
+    else if (err < -step)
+         motor->EAngle.omega -= step;
+    else
+        motor->EAngle.omega = motor->EAngle.omega_end;
+
+    /* 2) 标幺电角度积分（参照盛浩）：theta_pu += Ts × omega(rpm) × (1/60)
+          rpm/60 = 转/秒，×Ts = 每周期转数，小数部分累积即 0~1 标幺电角度 */
+    motor->EAngle.theta_pu += motor->pwm_period * motor->EAngle.omega * 0.0166666f;
+
+    /* 3) 归一化到 [0, 1)：角度循环累加 */
+    if (motor->EAngle.theta_pu >= 1.0f)
+         motor->EAngle.theta_pu -= 1.0f;
+    else if (motor->EAngle.theta_pu < 0.0f)
+         motor->EAngle.theta_pu += 1.0f;
+    // 将角度映射至-π-π
+    motor->FOC.angle = PI * (2 * motor->EAngle.theta_pu - 1.0f);
+}
 static API_Observer_t ObserverInterface = {
     .ObserverSMO = ObserverSMO,
     .PLL = PLL,
+    .EAngle_Update = EAngle_Update,
 };
 
-void __PWM_Register__(g_MotorInterface_t *g_API_Interface)
+void Observer_Register(g_MotorInterface_t *iface)
 {
-    if (g_API_Interface != NULL)
-        g_API_Interface->Observer = &ObserverInterface;
+    if (iface != NULL)
+        iface->Observer = &ObserverInterface;
 }

@@ -6,23 +6,19 @@
 #include "adc.h"
 #include "driver.h"
 #include "key.h"
+#include "taccdec.h"
 
 static uint16_t g_adc_buf[SAMPLE_BUFFER]; // 采样数组==>g_adc_buf[0]：母线电压；g_adc_buf[1]：波轮电位器；g_adc_buf[2]：温度
+static char Tx_buffer[TX_BUFFER_SIZE] = {0};
+
 static uint16_t g_temp_sample_cnt;        // 温度计算节流计数器
 static uint32_t g_align_start_tick;       // 系统tick获取
-static float g_open_theta;                /* 开环角度（rad） */
-static float g_open_omega;                /* 开环电角速度（rad/s） */
 static uint16_t g_obs_speed_ok_cnt = 0;   /* 观测转速连续达标计数 */
 static uint16_t g_obs_angle_ok_cnt = 0;   /* 观测角度连续收敛计数 */
 static uint16_t g_bus_uv_cnt = 0;         /* 母线欠压持续计数 */
 static uint16_t g_run_stall_cnt = 0;      /* 闭环失速连续计数 */
 static uint32_t g_open_start_tick;        // 系统tick获取
-static char Tx_buffer[TX_BUFFER_SIZE] = {0};
-static uint32_t last_tick = 0;
-
-static void MotorAlignStart(void);
-static void MotorOpenLoopStart(void);
-static void MotorState(Motor_t *motor);
+static uint32_t last_tick = 0;                 /* 梯形加减速实例：目标速度斜坡生成 */
 
 /**
  * @brief   规则组ADC通道采集中断回调函数，采集母线电压、波轮电位器以及温度数值
@@ -56,13 +52,14 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
     {
         // 获取结构体
         Motor_t *motor = GetMotorStruct();
+
         motor->SMO.K_slide = motor->Current.voltage_bus * ONE_DIV_SQRT3;
         // 获取到两相的adc原始值
         motor->Current.current_adc_a = HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_1);
         motor->Current.current_adc_c = HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_2);
         // 获取三相电流
-        motor->FOC.Ia = g_API_Interface.Sample->GetPhaseCurrent(motor->Current, CURRENT_FLAG_Ia);
-        motor->FOC.Ic = g_API_Interface.Sample->GetPhaseCurrent(motor->Current, CURRENT_FLAG_Ic);
+        motor->FOC.Ia = g_API_Interface.Sample->GetPhaseCurrent(&motor->Current, CURRENT_FLAG_Ia);
+        motor->FOC.Ic = g_API_Interface.Sample->GetPhaseCurrent(&motor->Current, CURRENT_FLAG_Ic);
         motor->FOC.Ib = -motor->FOC.Ia - motor->FOC.Ic;
         // 电流环输出限幅随母线电压动态更新（参照盛浩板：±Vbus/√3，防止过调制）
         float v_limit = motor->Current.voltage_bus * ONE_DIV_SQRT3;
@@ -83,8 +80,6 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
         {
             g_bus_uv_cnt = 0;
         }
-
-        MotorState(motor);
     }
 }
 /**
@@ -97,45 +92,6 @@ static void MotorAlignStart(void)
     Motor_t *motor = GetMotorStruct();
     g_align_start_tick = HAL_GetTick();
     motor->State = MOTOR_OPENLOOP_CURRENT_OPEN;
-}
-/**
- * @brief   电机开环强拖时设置参数等信息，修改电机运行状态
- * @param   null
- * @return  null
- */
-static void MotorOpenLoopStart(void)
-{
-    Motor_t *motor = GetMotorStruct();
-    g_open_theta = ALIGN_ANGLE; /* 从预定位角度继续，角度连续 */
-    g_open_omega = OPENLOOP_OMEGA_START;
-    g_open_start_tick = HAL_GetTick();
-    g_obs_speed_ok_cnt = 0; /* 重置收敛计数，避免残留计数导致立即切换 */
-    g_obs_angle_ok_cnt = 0;
-    motor->State = MOTOR_OPENLOOP_CURRENT_CLOSE;
-}
-static void MotorState(Motor_t *motor)
-{
-    // 校准==>低速强拖==>滑膜观测器
-    switch (motor->State)
-    {
-    case MOTOR_OPENLOOP_CURRENT_OPEN:
-        
-        break;
-    case MOTOR_OPENLOOP_CURRENT_CLOSE:
-        
-        break;
-    case MOTOR_RUN:
- 
-        break;
-    case MOTOR_STOP:
-        g_API_Interface.Driver->SetPWMValue(PWM_ARR_ZERO, PWM_ARR_ZERO, PWM_ARR_ZERO);
-        g_API_Interface.Driver->MotorDriverDisable;
-        break;
-    default:
-        g_API_Interface.Driver->SetPWMValue(PWM_ARR_ZERO, PWM_ARR_ZERO, PWM_ARR_ZERO);
-        g_API_Interface.Driver->MotorDriverDisable;
-        break;
-    }
 }
 /**************************************parameter Init********************************************/
 /**
@@ -172,7 +128,7 @@ void TemperatureInit(Temperature_t *temp)
  */
 void MotorParaInit(Motor_t *motor)
 {
-    motor->pwm_period = GetPwmPeriod();
+    motor->pwm_period = g_API_Interface.Sample->GetPwmPeriod();
     // current parameter init
     motor->Current.adc_bus = 0.0f;
     motor->Current.current_adc_a = 0.0f;
@@ -252,6 +208,7 @@ void MotorParaInit(Motor_t *motor)
     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
+
     HAL_TIM_Base_Start_IT(&htim1);
     HAL_TIM_Base_Start_IT(&htim2);
 }
@@ -264,16 +221,39 @@ const char *StateName(State_t state)
 {
     switch (state)
     {
-    case MOTOR_OPENLOOP_CURRENT_OPEN:
-        return "Open current";
-    case MOTOR_OPENLOOP_CURRENT_CLOSE:
-        return "Close current";
-    case MOTOR_RUN:
-        return "RUN";
+    case MOTOR_OPENLOOP_CURRENT_OPEN:return "Open current";
+    case MOTOR_OPENLOOP_CURRENT_CLOSE:return "Close current";
+    case MOTOR_STOP:return "STOP";
+    default:return "ERROR";
+    }
+}
+/**
+ * @brief   电机运行状态控制
+ * @attention   该函数使用状态机实现电机从零速启动到滑膜观测器接入的完整过程
+ * @param   Motor_t *motor
+ * @return  null
+ */
+void MotorStateChange(Motor_t *motor)
+{
+    switch (motor->State)
+    {
     case MOTOR_STOP:
-        return "STOP";
+        g_API_Interface.Driver->SetPWMValue(PWM_ARR_ZERO, PWM_ARR_ZERO, PWM_ARR_ZERO);
+        g_API_Interface.Driver->MotorDriverDisable();
+        /* code */
+        break;
+    case MOTOR_OPENLOOP_CURRENT_OPEN:
+        g_API_Interface.Observer->EAngle_Update(motor);
+        break;
+    case MOTOR_OPENLOOP_CURRENT_CLOSE:
+        
+        break;
+    case STRONG_DRAG_SMO_SPEED_CURRENT_LOOP:
+        g_API_Interface.Driver->MotorDriverEnable();
+        break;
     default:
-        return "ERROR";
+        motor->State = MOTOR_STOP;
+        break;
     }
 }
 /**主函数中实现 */
@@ -298,24 +278,5 @@ void TxMotorData(Motor_t *motor, Temperature_t *temp)
     if ((Tx_buff_len > 0) && (Tx_buff_len <= TX_BUFFER_SIZE))
     {
         printf("%s", Tx_buffer);
-    }
-}
-/** 放在定时器2中实现，和按键一起 */
-void MotorSpedControl(Motor_t *motor)
-{
-    if (HAL_GetTick() - last_tick > 2U)
-    {
-        last_tick = HAL_GetTick();
-
-        // 电位器目标：0~MOTOR_SEPPD_COEFFICIENT 对应机械角速度(rad/s)。
-        // 除以极对数，与 foc.c 速度环反馈(机械角速度 omerga_hat/POLE_PAIRS)单位一致
-        float target = MOTOR_SEPPD_COEFFICIENT * motor->Current.pot_ratio / (float)MOTOR_POLE_PAIRS;
-        float diff = target - motor->PID_Speed.aimValue;
-
-        if (diff > 0.5f)
-            diff = 0.5f;
-        else if (diff < -0.5f)
-            diff = -0.5f;
-        motor->PID_Speed.aimValue += diff;
     }
 }

@@ -105,8 +105,8 @@ static API_Sample_t SampleInterface = {
     .GetVoltageBus = GetVoltageBus,
 };
 
-void __PWM_Register__(g_MotorInterface_t *g_API_Interface)
+void Sample_Register(g_MotorInterface_t *iface)
 {
-    if (g_API_Interface != NULL)
-        g_API_Interface->Sample = &SampleInterface;
+    if (iface != NULL)
+        iface->Sample = &SampleInterface;
 }

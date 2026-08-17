@@ -63,19 +63,20 @@ virtualFolder:
       files:
         - path: ../motorControl/Src/globalControl.c
         - path: ../motorControl/Src/motorPara.c
-      folders: []
-    - name: algorithm
-      files:
-        - path: ../motorControl/algorithm/Src/foc.c
-        - path: ../motorControl/algorithm/Src/observer.c
-        - path: ../motorControl/algorithm/Src/statueSwitch.c
-      folders: []
-    - name: hardware
-      files:
-        - path: ../motorControl/hardware/Src/driver.c
-        - path: ../motorControl/hardware/Src/sample.c
-        - path: ../motorControl/hardware/Src/key.c
-      folders: []
+        - path: ../motorControl/Src/statueSwitch.c
+      folders:
+        - name: algorithm
+          files:
+            - path: ../motorControl/algorithm/Src/foc.c
+            - path: ../motorControl/algorithm/Src/observer.c
+            - path: ../motorControl/algorithm/Src/taccdec.c
+          folders: []
+        - name: hardware
+          files:
+            - path: ../motorControl/hardware/Src/driver.c
+            - path: ../motorControl/hardware/Src/key.c
+            - path: ../motorControl/hardware/Src/sample.c
+          folders: []
     - name: ::CMSIS
       files: []
       folders: []
@@ -101,7 +102,8 @@ targets:
         - .cmsis/include
         - RTE/_foc_sensorless
       libList: []
-    excludeList: []
+    excludeList:
+      - <virtual_root>/algorithm
     settings:
       debugger: cortex-debug
     toolchain: AC6

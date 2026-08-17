@@ -39,7 +39,7 @@ static void MotorDriverDisable(void)
  */
 static void LedControl(State_t state)
 {
-    if (state == MOTOR_RUN)
+    if (state == STRONG_DRAG_SMO_SPEED_CURRENT_LOOP)
     {
         HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET); // ALL
         HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, GPIO_PIN_RESET);
@@ -91,8 +91,8 @@ static API_Driver_t DriverInterface = {
     .SetPWMValue = SetPWMValue,
 };
 
-void __PWM_Register__(g_MotorInterface_t *g_API_Interface)
+void Driver_Register(g_MotorInterface_t *iface)
 {
-    if (g_API_Interface != NULL)
-        g_API_Interface->Driver = &DriverInterface;
+    if (iface != NULL)
+        iface->Driver = &DriverInterface;
 }

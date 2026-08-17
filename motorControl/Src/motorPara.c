@@ -14,10 +14,11 @@ Motor_t *GetMotorStruct(void)
     return motor;
 } 
 
-const g_MotorInterface_t g_Interface_API = {
+g_MotorInterface_t g_API_Interface = {
     .Driver = NULL,
     .FOC = NULL,
     .Observer = NULL,
     .Sample = NULL,
+    .TAccDec = NULL,
 };
 

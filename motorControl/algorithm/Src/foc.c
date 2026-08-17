@@ -1,3 +1,6 @@
+/**
+ * FOC算法中，除了PID外环(即速度环)为机械角速度，其他传入的均为电角速度
+ */
 #include "foc.h"
 #include "motorPara.h"
 /*****************************速度反馈滤波************************************/
@@ -32,9 +35,9 @@ static void Park(Motor_t *motor)
  * @param  pid: PID 实例；aim: 目标值；now: 当前值
  * @retval 限幅后的输出
  */
-static float PIDCalc(PID_t *pid, float aimValue, float nowValue)
+static void PID(PID_t *pid)
 {
-    float error = aimValue - nowValue;
+    float error = pid->aimValue - pid->nowValue;
 
     /* 抗积分饱和（参照盛浩板 PID_Control）：
        仅当输出未饱和时才累加积分，防止积分过深导致退出饱和时响应滞后；
@@ -51,25 +54,7 @@ static float PIDCalc(PID_t *pid, float aimValue, float nowValue)
     pid->lastError = error;
 
     pid->Output = _constrain(out, pid->OutputMax, pid->OutputMin);
-    return pid->Output;
-}
-/**
- * @fn  void pid(Motor_t *motor)
- * @brief   incremental PID control
- * @param   Motor_t *motor
- * @return  null
- */
-static void PID(Motor_t *motor)
-{
-    /* 转速反馈一阶低通：滤掉 SMO 高频噪声，防止速度环输出抖动 */
-    g_omega_filt += SPEED_LPF_ALPHA * (motor->PLL.omerga_hat - g_omega_filt);
-    motor->PID_Speed.nowValue = g_omega_filt;
-    /* 速度环（外环）：目标转速 vs 滤波后实际转速 → Iq 目标 */
-    float iq_ref = PIDCalc(PID, motor->PID_Speed.aimValue, g_omega_filt);
-    /* d 轴电流环：目标 Id = 0 */
-    motor->FOC.Vd = PIDCalc(&motor->PID_Id, 0.0f, motor->FOC.Id);
-    /* q 轴电流环：目标 Iq = 速度环输出 */
-    motor->FOC.Vq = PIDCalc(&motor->PID_Iq, iq_ref, motor->FOC.Iq);
+
 }
 /**
  * @fn  void AntiPark(Motor_t *motor)
@@ -98,7 +83,7 @@ static void SVPWM(Motor_t *motor)
 
     float V_alpha = motor->FOC.V_alpha;
     float V_beta = motor->FOC.V_beta;
-    float V_dc = Current->voltage_bus;
+    float V_dc = motor->Current.voltage_bus;
     float Ts = motor->FOC.pwm_period;
 
     float U1 = V_beta;
@@ -187,6 +172,7 @@ static void SVPWM(Motor_t *motor)
     float Va = motor->FOC.V_alpha;
     float Vb = -0.5f * motor->FOC.V_alpha + SQRT3_DIV_TWO * motor->FOC.V_beta;
     float Vc = -0.5f * motor->FOC.V_alpha - SQRT3_DIV_TWO * motor->FOC.V_beta;
+    float vbus = motor->FOC.Voltage_bus;
     // find max and min vlotage
     float Vmax = Va;
     if (Vb > Vmax)
@@ -209,7 +195,7 @@ static void SVPWM(Motor_t *motor)
     float V_peak = (Vmax - Vmin) * 0.5f;
     /* 过调制限制：零序注入后调制波峰值必须 ≤ Vbus/2（Duty=0.5+Va'/Vbus ∈ [0,1]）。
        原用 Vbus/√3(0.577Vbus) 偏大，限幅后 Duty 仍可达 1.077，被 _constrain 削顶畸变 */
-    float vbus = motor->Current.voltage_bus;
+    
     if (vbus <= 0.0f) /* 母线采样异常保护：输出零矢量（50%），避免除零后全压输出 */
     {
         motor->FOC.DutyCycleA= 0.5f;
@@ -253,8 +239,8 @@ static API_FOC_t FOCInterface = {
     .SVPWM = SVPWM,
 };
 
-void __PWM_Register__(g_MotorInterface_t *g_API_Interface)
+void FOC_Register(g_MotorInterface_t *iface)
 {
-    if (g_API_Interface != NULL)
-        g_API_Interface->FOC = &FOCInterface;
+    if (iface != NULL)
+        iface->FOC = &FOCInterface;
 }

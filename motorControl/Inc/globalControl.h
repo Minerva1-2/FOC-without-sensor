@@ -27,7 +27,9 @@
                                                         低速切换反电动势太小、SMO 不可靠，易在切换瞬间失控 */
 #define OPENLOOP_ACCEL              (60.0f * PI)     /* 角加速度：每秒爬 20Hz（可调） */
 #define OPENLOOP_STABLE_MS          (200U)           /* 到达目标转速后的稳定时间 */
-#define MOTOR_SEPPD_COEFFICIENT     (1000U)           // 波轮电位器对应速度的一次函数系数
+/* 梯形加减速（T 型速度曲线）：加速度按电气角速度口径(rad/s²)，与速度环反馈(omerga_hat)单位一致 */
+#define TACC_ACCELERATION           (1000.0f)         /* 电气 rad/s²：满量程1000rad/s 约 1s 加满，实机按负载调 */
+#define TACC_CONTROL_TS             (0.002f)          /* 梯形加减速调用周期(s)：与 MotorSpedControl 2ms 节拍一致 */
 /* 开环→闭环切换收敛判据（仿盛浩板 StrongDragToObs：速度与角度同时收敛才切换） */
 #define OPENLOOP_OBS_SPEED_ERR      (2.0f * PI)      /* 观测电角速度与开环给定误差容差(rad/s) */
 #define OPENLOOP_OBS_OK_CNT         (100U)           /* 速度收敛需连续满足的周期数 */
