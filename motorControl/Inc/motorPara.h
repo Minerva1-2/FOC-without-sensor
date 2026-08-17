@@ -192,7 +192,7 @@ typedef struct
     API_TAccDec_t *TAccDec;
 }g_MotorInterface_t;
 
-extern g_MotorInterface_t g_API_Interface;
+extern const g_MotorInterface_t g_API_Interface;
 
 Temperature_t *GetTempStruct(void);
 Motor_t *GetMotorStruct(void);
