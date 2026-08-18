@@ -11,10 +11,10 @@ static float g_omega_filt;      /* 滤波后的电角速度(rad/s) */
  * @param   Motor_t *motor
  * @return  null
  */
-static void Clark(Motor_t *motor)
+static void Clark(FOC_t *FOC)
 {
-    motor->FOC.I_alpha = motor->FOC.Ia;
-    motor->FOC.I_beta = (motor->FOC.Ia + 2.0f * motor->FOC.Ib) / sqrtf(3.0f);
+    FOC->I_alpha = FOC->Ia;
+    FOC->I_beta = (FOC->Ia + 2.0f * FOC->Ib) / sqrtf(3.0f);
 }
 /**
  * @fn  void Park(Motor_t *motor)
@@ -22,13 +22,14 @@ static void Clark(Motor_t *motor)
  * @param   Motor_t *motor
  * @return  null
  */
-static void Park(Motor_t *motor)
+static void Park(FOC_t *FOC)
 {
-    float sin_angle = sinf(motor->FOC.angle);
-    float cos_angle = cosf(motor->FOC.angle);
+    float sin_angle = sinf(FOC->angle);
+    float cos_angle = cosf(FOC->angle);
 
-    motor->FOC.Id = motor->FOC.I_alpha * cos_angle + motor->FOC.I_beta * sin_angle;
-    motor->FOC.Iq = -(motor->FOC.I_alpha * sin_angle) + motor->FOC.I_beta * cos_angle;
+    FOC->Id = FOC->I_alpha * cos_angle + FOC->I_beta * sin_angle;
+    FOC->Iq = -(FOC->I_alpha * sin_angle) + FOC->I_beta * cos_angle;
+
 }
 /**
  * @brief  位置式 PID 通用计算
@@ -62,29 +63,29 @@ static void PID(PID_t *pid)
  * @param   Motor_t *motor
  * @return  null
  */
-static void AntiPark(Motor_t *motor)
+static void AntiPark(FOC_t *FOC)
 {
-    float sin_el = sinf(motor->FOC.angle);
-    float cos_el = cosf(motor->FOC.angle);
+    float sin_el = sinf(FOC->angle);
+    float cos_el = cosf(FOC->angle);
 
-    motor->FOC.V_alpha = motor->FOC.Vd * cos_el - motor->FOC.Vq * sin_el;
-    motor->FOC.V_beta = motor->FOC.Vd * sin_el + motor->FOC.Vq * cos_el;
+    FOC->V_alpha = FOC->Vd * cos_el - FOC->Vq * sin_el;
+    FOC->V_beta = FOC->Vd * sin_el + FOC->Vq * cos_el;
 }
 /**
  * @brief   this code include two SVPWM methods.
  *          defalut method is seven stage SVPWM,if you want to change the method,
  *          please change the SVPWM define in "globalControl.h".
  */
-static void SVPWM(Motor_t *motor)
+static void SVPWM(FOC_t *FOC)
 {
 #if (defined(SVPWM_SECTOR_METHOD))
     float T1, T2;
     float Ta, Tb, Tc;
 
-    float V_alpha = motor->FOC.V_alpha;
-    float V_beta = motor->FOC.V_beta;
-    float V_dc = motor->Current.voltage_bus;
-    float Ts = motor->FOC.pwm_period;
+    float V_alpha = FOC->V_alpha;
+    float V_beta = FOC->V_beta;
+    float V_dc = FOC->Voltage_bus;
+    float Ts = FOC->Ts;
 
     float U1 = V_beta;
     float U2 = SQRT3_DIV_TWO * V_alpha - 0.5f * V_beta;
@@ -163,16 +164,16 @@ static void SVPWM(Motor_t *motor)
         break;
     }
     // duty output
-    motor->FOC.DutyCycleA = Ta / Ts;
-    motor->FOC.DutyCycleB = Tb / Ts;
-    motor->FOC.DutyCycleC = Tc / Ts;
+    FOC->DutyCycleA = Ta / Ts;
+    FOC->DutyCycleB = Tb / Ts;
+    FOC->DutyCycleC = Tc / Ts;
     
 #elif (defined(SVPWM_ZERO_SQUENCE))
     // Anti Clark
-    float Va = motor->FOC.V_alpha;
-    float Vb = -0.5f * motor->FOC.V_alpha + SQRT3_DIV_TWO * motor->FOC.V_beta;
-    float Vc = -0.5f * motor->FOC.V_alpha - SQRT3_DIV_TWO * motor->FOC.V_beta;
-    float vbus = motor->FOC.Voltage_bus;
+    float Va = FOC->V_alpha;
+    float Vb = -0.5f * FOC->V_alpha + SQRT3_DIV_TWO * FOC->V_beta;
+    float Vc = -0.5f * FOC->V_alpha - SQRT3_DIV_TWO * FOC->V_beta;
+    float vbus = FOC->Voltage_bus;
     // find max and min vlotage
     float Vmax = Va;
     if (Vb > Vmax)
@@ -198,9 +199,9 @@ static void SVPWM(Motor_t *motor)
     
     if (vbus <= 0.0f) /* 母线采样异常保护：输出零矢量（50%），避免除零后全压输出 */
     {
-        motor->FOC.DutyCycleA= 0.5f;
-        motor->FOC.DutyCycleB = 0.5f;
-        motor->FOC.DutyCycleC = 0.5f;
+        FOC->DutyCycleA= 0.5f;
+        FOC->DutyCycleB = 0.5f;
+        FOC->DutyCycleC = 0.5f;
         
         return;
     }
@@ -215,9 +216,9 @@ static void SVPWM(Motor_t *motor)
         Vc *= scale;
     }
 
-    motor->FOC.Va = Va;
-    motor->FOC.Vb = Vb;
-    motor->FOC.Vc = Vc;
+    FOC->Va = Va;
+    FOC->Vb = Vb;
+    FOC->Vc = Vc;
 
     float DutyCycleA = 0.5f + Va / vbus;
     float DutyCycleB = 0.5f + Vb / vbus;
@@ -226,9 +227,9 @@ static void SVPWM(Motor_t *motor)
        过调制饱和到 100%/0% 时该相下桥臂恒关断/恒开通，000 采样窗口消失，
        低边电流采样采不到 → 电流环/SMO/PLL 反馈全乱（现象：电流±9A 跳变、角度乱跳）。
        限制最大占空比保证每个 PWM 周期都存在 000 矢量采样窗口 */
-    motor->FOC.DutyCycleA = _constrain(DutyCycleA, 0.92f, 0.02f);
-    motor->FOC.DutyCycleB = _constrain(DutyCycleB, 0.92f, 0.02f);
-    motor->FOC.DutyCycleC = _constrain(DutyCycleC, 0.92f, 0.02f);
+    FOC->DutyCycleA = _constrain(DutyCycleA, 0.92f, 0.02f);
+    FOC->DutyCycleB = _constrain(DutyCycleB, 0.92f, 0.02f);
+    FOC->DutyCycleC = _constrain(DutyCycleC, 0.92f, 0.02f);
 #endif
 }
 

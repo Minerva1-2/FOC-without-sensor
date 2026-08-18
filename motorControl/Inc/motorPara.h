@@ -11,6 +11,9 @@
 #define MOTOR_PHASE_L       (0.000046f)
 #define PI                  (3.14159265f)
 #define TWO_PI              (6.28318530f)
+#define SPEED_LPF_ALPHA     (0.1f)              /* 一阶低通系数 */
+#define SQRT3_DIV_TWO       (0.86602540378f)    // √3 / 2
+#define ONE_DIV_SQRT3       (0.57735026919f)    // 1 / √3
 /**********************************************************************************************************/
 /*******************************************电机结构体******************************************************/
 /**********************************************************************************************************/
@@ -19,11 +22,21 @@ typedef enum
     MOTOR_OPENLOOP_CURRENT_OPEN,        /* 开环强拖：速度、电流开环 */   
     MOTOR_OPENLOOP_CURRENT_CLOSE,       /* 开环强拖：速度开环、电流闭环，旋转磁场牵引转子 */
     STRONG_DRAG_SMO_SPEED_CURRENT_LOOP, /* 闭环运行：SMO+PLL 速度/电流双闭环 */
+    MOTOR_STOP,                         /* 停机：零占空比 */
+}State_t;
+
+typedef enum 
+{
+    OPEN_LOOP,
+    CLOSE_LOOP,
+}GeneralMode_t;
+
+typedef enum 
+{
     TACC_UNIFORM,                       /* 匀速（已到达目标） */
     TACC_ACCELERATE,                    /* 加速 */
     TACC_DECELERATE,                    /* 减速 */
-    MOTOR_STOP,                         /* 停机：零占空比 */
-}State_t;
+}MOTION_STATE;
 /**
  * 电机错误状态
  */
@@ -45,6 +58,7 @@ typedef struct
     float nowValue;
     volatile float aimValue;
     float integral;
+    int8_t SpeedCalculateCnt;
 }PID_t;
 /* 电气参数 */
 typedef struct
@@ -54,20 +68,25 @@ typedef struct
     float I_alpha, I_beta;                          // clark变换之后的电流值
     float V_alpha, V_beta; 
     float Iq, Id;                                   // park变换后的数值
+    float Iq_ref, Id_ref;
     float Vq, Vd;
     float Voltage_bus;                              // 母线电压
     float angle;                                    // 电角度
     float DutyCycleA;                                   // 占空比数值
     float DutyCycleB;
     float DutyCycleC;
+    float Ts;
 } FOC_t;
 typedef struct
 {
     float I_alpha_hat, I_beta_hat;                  // 观测器预估电流
     float e_alpha_hat, e_beta_hat;                  // 观测器预估反电动势
     float e_alpha_raw, e_beta_raw;                  // 观测器实际输出反电动势
+    float V_alpha, V_beta;
+    float I_alpha, I_beta;
     float K_slide;                                  // 滑膜增益
     float wc;                                       // 低通滤波截止频率
+    float Ts;
 }SMO_t;
 typedef struct
 {
@@ -75,6 +94,9 @@ typedef struct
     float theta_error;                              // 角度误差
     float p, i;                                     // pid参数     
     float integral;                                 // 积分数值
+    float e_alpha_hat, e_beta_hat;                  // 观测器预估反电动势
+    float theta_hat_lpf, omerga_hat_lpf;
+    float Ts;
 }PLL_t;
 /* current sample struct */
 typedef struct 
@@ -102,6 +124,8 @@ typedef struct {
     float TargetSpeed;      /* 目标电气角速度(rad/s)，应用层每周期更新 */
     float SpeedOut;         /* 输出电气角速度(rad/s)，作为速度环目标 */
     float AccSpeed;         /* 加速度(rad/s²)，加减速共用 */
+    float Ts;
+    MOTION_STATE State;
 } TAccDec_t;
 
 /* 电角度发生器：开环强拖阶段产生旋转电角度（参照盛浩 Electrical_Angle_Generator）。
@@ -109,11 +133,43 @@ typedef struct {
    角度：标幺值 theta_pu(0~1) 循环积分（0~1 对应 0~360° 电角度），输出时 ×2π 转 rad。 */
 typedef struct {
     float theta_pu;         /* 开环电角度标幺值(0~1)，对应 0~360° */
+    float theta_map;        // 开环角度映射
     float omega;            /* 当前开环电角速度(电气 rpm) */
     float omega_start;      /* 起始电角速度(电气 rpm) */
     float omega_end;        /* 目标电角速度(电气 rpm)：达到后匀速 */
     float accel;            /* 角加速度(电气 rpm/s) */
+    float Ts;
 } EAngle_t;
+
+typedef struct
+{
+    GeneralMode_t LastGeneralMode;
+    GeneralMode_t GeneralMode;
+    MOTION_STATE MotionState;
+    uint16_t CloseRunTime;
+    float OpenCurr;
+    float OpenCurrLast;
+    float OpenCurrMax;
+    int16_t CheckCnt;
+    float ThetaRef;
+    float ThetaObs;
+    float ThetaErr;
+    float OpenSpeed;
+    float CloseSpeed;
+    float EleOpenSpeedAbs;
+    float EleCloseSpeedAbs;
+    float SpeedErr;
+    float SpeedErrFlt;
+    uint8_t ErrFlag;
+    uint16_t ErrCnt;
+    uint16_t ErrTimes;
+    float LastTargetSpeed;
+    float OpenToCloseSwitchSpeed;
+    float CloseToOpenSwitchSpeed;
+    float CloseMinSpeed;
+    float CurrChangeRate;
+    float ObsMag;
+}ModeChange_t;
 
 typedef struct
 {
@@ -142,6 +198,7 @@ typedef struct
     PLL_t PLL;
     TAccDec_t TAccDec;
     EAngle_t EAngle;
+    ModeChange_t ModeChange;                        // 电机状态切换
 }Motor_t;
 /*************************************************************************************************************/
 /************************************************函数接口******************************************************/
@@ -156,18 +213,18 @@ typedef struct
 
 typedef struct
 {
-    void (*Clark)(Motor_t *motor);
-    void (*Park)(Motor_t *motor);
+    void (*Clark)(FOC_t *FOC);
+    void (*Park)(FOC_t *FOC);
     void (*PID)(PID_t *PID);
-    void (*AntiPark)(Motor_t *motor);
-    void (*SVPWM)(Motor_t *motor);
+    void (*AntiPark)(FOC_t *FOC);
+    void (*SVPWM)(FOC_t *FOC);
 }API_FOC_t;
 
 typedef struct
 {
-    void (*ObserverSMO)(Motor_t *motor);
-    void (*PLL)(Motor_t *motor);
-    void (*EAngle_Update)(Motor_t *motor);
+    void (*ObserverSMO)(SMO_t *SMO);
+    void (*PLL)(PLL_t *PLL);
+    void (*EAngle_Update)(EAngle_t *EAngle);
 }API_Observer_t;
 
 typedef struct
@@ -181,8 +238,16 @@ typedef struct
 
 typedef struct
 {
-    void (*TAccDec_Update)(Motor_t *motor);
+    void (*TAccDec_Update)(TAccDec_t *TAccDec);
 }API_TAccDec_t;
+
+typedef struct
+{
+    void (*StrongDragCurrentOpenLoop)(Motor_t *motor);
+    void (*StrongDragCurrentCloseLoop)(Motor_t *motor);
+    void (*StrongDragSmoSpeedCurrentLoop)(Motor_t *motor);
+}API_Switch_t;
+
 typedef struct
 {
     API_Driver_t *Driver;
@@ -190,6 +255,7 @@ typedef struct
     API_Observer_t *Observer;
     API_Sample_t *Sample;
     API_TAccDec_t *TAccDec;
+    API_Switch_t *Switch;
 }g_MotorInterface_t;
 
 extern const g_MotorInterface_t g_API_Interface;

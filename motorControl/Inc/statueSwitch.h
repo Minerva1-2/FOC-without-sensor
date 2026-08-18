@@ -3,6 +3,9 @@
 
 #include "motorPara.h"
 
-#define MOTOR_SEPPD_COEFFICIENT     (1000U)           // 波轮电位器对应速度的一次函数系数
+#define CURRENT_FLAG_Ia             (0U)
+#define CURRENT_FLAG_Ic             (1U)
+
+void FOC_Register(g_MotorInterface_t *iface);
 
 #endif

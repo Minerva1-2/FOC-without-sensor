@@ -1,0 +1,7 @@
+CompileFlags:
+  Add:
+    - -isystemd:\keil\core\ARM\ARMCLANG/include
+    - -isystemd:\keil\core\ARM\ARMCLANG/include/libcxx
+  Remove: []
+  CompilationDatabase: ./build/foc_sensorless
+  Compiler: d:\keil\core\ARM\ARMCLANG\bin\armclang.exe

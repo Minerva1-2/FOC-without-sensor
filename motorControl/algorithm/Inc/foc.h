@@ -15,10 +15,6 @@
 #include "globalControl.h"
 #include "stm32g4xx.h"
 
-#define SQRT3_DIV_TWO       (0.86602540378f)    // √3 / 2
-#define ONE_DIV_SQRT3       (0.57735026919f)    // 1 / √3
-#define SPEED_LPF_ALPHA     (0.01f)  /* 一阶低通系数：α≈2π×fc×Ts，fc≈16Hz@Ts=100µs */
-
 void FOC_Register(g_MotorInterface_t *iface);
 
 #endif

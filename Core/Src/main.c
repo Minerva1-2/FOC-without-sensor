@@ -97,13 +97,18 @@ int main(void)
   MX_ADC2_Init();
   MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
-    
+    Motor_t *motor = GetMotorStruct();
+    Temperature_t *temp = GetTempStruct();
+
+    MotorParaInit(motor);
+    TemperatureInit(temp);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    TxMotorData(motor, temp);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

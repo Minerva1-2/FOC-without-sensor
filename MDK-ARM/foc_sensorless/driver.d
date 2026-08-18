@@ -42,4 +42,4 @@ foc_sensorless/driver.o: ..\motorControl\hardware\Src\driver.c \
   D:\keil\core\ARM\ARMCLANG\Bin\..\include\stdbool.h \
   ..\motorControl\algorithm\Inc\observer.h \
   D:\keil\core\ARM\ARMCLANG\Bin\..\include\math.h \
-  ..\motorControl\Inc\motorPara.h
+  ..\motorControl\Inc\motorPara.h ..\Core\Inc\tim.h

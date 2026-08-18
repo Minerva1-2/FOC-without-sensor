@@ -28,5 +28,6 @@ const g_MotorInterface_t g_API_Interface = {
     .Observer = NULL,
     .Sample = NULL,
     .TAccDec = NULL,
+    .Switch = NULL,
 };
 

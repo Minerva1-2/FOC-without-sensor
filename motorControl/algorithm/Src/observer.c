@@ -11,64 +11,56 @@
  * @param   smo: 观测器状态；foc: 电压(输入)/电流(反馈)；pwm_period: 控制周期(s)
  * @return  null
  */
-static void ObserverSMO(Motor_t *motor)
+static void ObserverSMO(SMO_t *SMO)
 {
     // 电流误差
-    float Ts = motor->pwm_period;
+    float Ts = SMO->Ts;
     float R_over_L = MOTOR_PHASE_R / MOTOR_PHASE_L;
     float inv_L = 1.0f / MOTOR_PHASE_L;
     // current observer
-    motor->SMO.I_alpha_hat += Ts * (-R_over_L * motor->SMO.I_alpha_hat + (motor->FOC.V_alpha - motor->SMO.e_alpha_raw) * inv_L);
-    motor->SMO.I_beta_hat += Ts * (-R_over_L * motor->SMO.I_beta_hat + (motor->FOC.V_beta - motor->SMO.e_beta_raw) * inv_L);
+    SMO->I_alpha_hat += Ts * (-R_over_L * SMO->I_alpha_hat + (SMO->V_alpha - SMO->e_alpha_raw) * inv_L);
+    SMO->I_beta_hat += Ts * (-R_over_L * SMO->I_beta_hat + (SMO->V_beta - SMO->e_beta_raw) * inv_L);
     // 滑膜切换函数
-    float err_a = motor->SMO.I_alpha_hat - motor->FOC.I_alpha;
-    float err_b = motor->SMO.I_beta_hat - motor->FOC.I_beta;
-    float sgn_a = (err_a > 1.0f) ? motor->SMO.K_slide : (err_a < -1.0f) ? -motor->SMO.K_slide
-                                                                   : motor->SMO.K_slide * err_a;
-    float sgn_b = (err_b > 1.0f) ? motor->SMO.K_slide : (err_b < -1.0f) ? -motor->SMO.K_slide
-                                                                   : motor->SMO.K_slide * err_b;
+    float err_a = SMO->I_alpha_hat - SMO->I_alpha;
+    float err_b = SMO->I_beta_hat - SMO->I_beta;
+    float sgn_a = (err_a > 1.0f) ? SMO->K_slide : (err_a < -1.0f) ? -SMO->K_slide
+                                                                  : SMO->K_slide * err_a;
+    float sgn_b = (err_b > 1.0f) ? SMO->K_slide : (err_b < -1.0f) ? -SMO->K_slide
+                                                                  : SMO->K_slide * err_b;
     // 反电动势
-    motor->SMO.e_alpha_raw = sgn_a;
-    motor->SMO.e_beta_raw = sgn_b;
+    SMO->e_alpha_raw = sgn_a;
+    SMO->e_beta_raw = sgn_b;
 
-    motor->SMO.e_alpha_hat += SMO_LPF_ALPHA * (sgn_a - motor->SMO.e_alpha_hat);
-    motor->SMO.e_beta_hat += SMO_LPF_ALPHA * (sgn_b - motor->SMO.e_beta_hat);
+    SMO->e_alpha_hat += SMO_LPF_ALPHA * (sgn_a - SMO->e_alpha_hat);
+    SMO->e_beta_hat += SMO_LPF_ALPHA * (sgn_b - SMO->e_beta_hat);
 }
 /**
  * @brief   get esimation angle
  * @param   pll: PLL 状态；smo: 反电动势输入；foc: 输出角度写入 motor->FOC.angle；pwm_period: 控制周期(s)
  * @return  null
  */
-static void PLL(Motor_t *motor)
+static void PLL(PLL_t *PLL)
 {
-    float e_alpha = motor->SMO.e_alpha_hat;
-    float e_beta = motor->SMO.e_beta_hat;
-    float E = sqrtf(motor->SMO.e_alpha_hat * motor->SMO.e_alpha_hat + motor->SMO.e_beta_hat * motor->SMO.e_beta_hat);
+    float e_alpha = PLL->e_alpha_hat;
+    float e_beta = PLL->e_beta_hat;
+    float E = sqrtf(e_alpha * e_alpha + e_beta * e_beta);
+    // get the theta error when the angle more than 5 angle
+    PLL->theta_error = (-e_alpha * cosf(PLL->theta_hat) - e_beta * sinf(PLL->theta_hat)) / E;
 
-    if (E > PLL_E_MIN_SQ)
-    {
-        // get the theta error when the angle more than 5 angle
-        motor->PLL.theta_error = (-e_alpha * cosf(motor->PLL.theta_hat) - e_beta * sinf(motor->PLL.theta_hat)) / E;
-
-        motor->PLL.integral += motor->PLL.i * motor->PLL.theta_error * motor->pwm_period;
-        motor->PLL.integral = _constrain(motor->PLL.integral, OMEGA_MAX, -OMEGA_MAX);
-        motor->PLL.omerga_hat = motor->PLL.p * motor->PLL.theta_error +motor->PLL.integral;
-        motor->PLL.omerga_hat = _constrain(motor->PLL.omerga_hat, OMEGA_MAX, -OMEGA_MAX);
-    }
-    else
-    {
-        // 观测器不可用
-        motor->PLL.theta_error = 0.0f;
-    }
+    PLL->integral += PLL->i * PLL->theta_error * PLL->Ts;
+    PLL->integral = _constrain(PLL->integral, OMEGA_MAX, -OMEGA_MAX);
+    PLL->omerga_hat = PLL->p * PLL->theta_error + PLL->integral;
+    PLL->omerga_hat_lpf += SPEED_LPF_ALPHA * (PLL->omerga_hat - PLL->omerga_hat_lpf);
+    PLL->omerga_hat_lpf = _constrain(PLL->omerga_hat_lpf, OMEGA_MAX, -OMEGA_MAX);
     // get estimation angle
-    motor->PLL.theta_hat += motor->PLL.omerga_hat * motor->pwm_period;
+    PLL->theta_hat += PLL->omerga_hat_lpf * PLL->Ts;
+    PLL->theta_hat_lpf += SPEED_LPF_ALPHA * (PLL->theta_hat - PLL->theta_hat_lpf);
     // Angle normalization
-    if (motor->PLL.theta_hat > PI)
-        motor->PLL.theta_hat -= TWO_PI;
-    if (motor->PLL.theta_hat < -PI)
-        motor->PLL.theta_hat += TWO_PI;
+    if (PLL->theta_hat_lpf > PI)
+        PLL->theta_hat_lpf -= TWO_PI;
+    if (PLL->theta_hat_lpf < -PI)
+        PLL->theta_hat_lpf += TWO_PI;
     // output estimation angle
-    motor->FOC.angle = motor->PLL.theta_hat;
 }
 /**
  * @brief   电角度发生器：开环角速度斜坡 + 角度积分
@@ -77,30 +69,30 @@ static void PLL(Motor_t *motor)
  * @note    角速度口径：电气 rpm（omega_end 可直接接 TAccDec.SpeedOut）；
  *          角度为标幺值 theta_pu(0~1)，输出时 ×2π 转 rad 给 FOC。
  */
-static void EAngle_Update(Motor_t *motor)
+static void EAngle_Update(EAngle_t *EAngle)
 {
     /* 1) 角速度梯形斜坡（电气 rpm 口径，每周期步长 = accel × Ts） */
-    float step = motor->EAngle.accel * motor->pwm_period;
-    float err = motor->EAngle.omega_end - motor->EAngle.omega;
+    float step = EAngle->accel * EAngle->Ts;
+    float err = EAngle->omega_end - EAngle->omega;
 
     if (err > step)
-         motor->EAngle.omega += step;
+        EAngle->omega += step;
     else if (err < -step)
-         motor->EAngle.omega -= step;
+        EAngle->omega -= step;
     else
-        motor->EAngle.omega = motor->EAngle.omega_end;
+        EAngle->omega = EAngle->omega_end;
 
     /* 2) 标幺电角度积分（参照盛浩）：theta_pu += Ts × omega(rpm) × (1/60)
           rpm/60 = 转/秒，×Ts = 每周期转数，小数部分累积即 0~1 标幺电角度 */
-    motor->EAngle.theta_pu += motor->pwm_period * motor->EAngle.omega * 0.0166666f;
+    EAngle->theta_pu += EAngle->Ts * EAngle->omega * 0.0166666f;
 
     /* 3) 归一化到 [0, 1)：角度循环累加 */
-    if (motor->EAngle.theta_pu >= 1.0f)
-         motor->EAngle.theta_pu -= 1.0f;
-    else if (motor->EAngle.theta_pu < 0.0f)
-         motor->EAngle.theta_pu += 1.0f;
+    if (EAngle->theta_pu >= 1.0f)
+        EAngle->theta_pu -= 1.0f;
+    else if (EAngle->theta_pu < 0.0f)
+        EAngle->theta_pu += 1.0f;
     // 将角度映射至-π-π
-    motor->FOC.angle = PI * (2 * motor->EAngle.theta_pu - 1.0f);
+    EAngle->theta_map = PI * (2 * EAngle->theta_pu - 1.0f);
 }
 static API_Observer_t ObserverInterface = {
     .ObserverSMO = ObserverSMO,

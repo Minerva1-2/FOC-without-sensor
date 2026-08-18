@@ -44,4 +44,7 @@ foc_sensorless/globalcontrol.o: ..\motorControl\Src\globalControl.c \
   ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal_uart.h \
   ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal_uart_ex.h \
   ..\motorControl\algorithm\Inc\foc.h ..\Core\Inc\adc.h \
-  ..\motorControl\hardware\Inc\driver.h ..\Core\Inc\gpio.h
+  ..\motorControl\hardware\Inc\driver.h ..\Core\Inc\gpio.h \
+  ..\motorControl\hardware\Inc\key.h \
+  ..\motorControl\hardware\Inc\driver.h \
+  ..\motorControl\algorithm\Inc\taccdec.h
