@@ -100,15 +100,16 @@ int main(void)
     Motor_t *motor = GetMotorStruct();
     Temperature_t *temp = GetTempStruct();
 
-    MotorParaInit(motor);
     TemperatureInit(temp);
+    MotorParaInit(motor);
+    FuncRegister();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    TxMotorData(motor, temp);
+      TxMotorData(motor, temp);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

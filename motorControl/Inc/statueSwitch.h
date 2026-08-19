@@ -6,6 +6,6 @@
 #define CURRENT_FLAG_Ia             (0U)
 #define CURRENT_FLAG_Ic             (1U)
 
-void FOC_Register(g_MotorInterface_t *iface);
+void Switch_Register(g_MotorInterface_t *iface);
 
 #endif

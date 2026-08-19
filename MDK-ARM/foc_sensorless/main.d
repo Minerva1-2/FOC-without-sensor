@@ -41,6 +41,10 @@ foc_sensorless/main.o: ..\Core\Src\main.c ..\Core\Inc\main.h \
   D:\keil\core\ARM\ARMCLANG\Bin\..\include\stdio.h \
   ..\motorControl\Inc\motorPara.h \
   D:\keil\core\ARM\ARMCLANG\Bin\..\include\stdbool.h \
-  ..\motorControl\algorithm\Inc\observer.h \
+  ..\motorControl\hardware\Inc\sample.h \
   D:\keil\core\ARM\ARMCLANG\Bin\..\include\math.h \
-  ..\motorControl\Inc\motorPara.h ..\motorControl\hardware\Inc\driver.h
+  ..\motorControl\Inc\motorPara.h ..\motorControl\hardware\Inc\driver.h \
+  ..\motorControl\algorithm\Inc\foc.h \
+  ..\motorControl\algorithm\Inc\taccdec.h \
+  ..\motorControl\Inc\statueSwitch.h \
+  ..\motorControl\algorithm\Inc\observer.h

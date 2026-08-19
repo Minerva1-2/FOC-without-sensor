@@ -7,6 +7,7 @@
 #include "driver.h"
 #include "key.h"
 #include "taccdec.h"
+#include "statueSwitch.h"
 
 static uint16_t g_adc_buf[SAMPLE_BUFFER]; // 采样数组==>g_adc_buf[0]：母线电压；g_adc_buf[1]：波轮电位器；g_adc_buf[2]：温度
 static char Tx_buffer[TX_BUFFER_SIZE] = {0};
@@ -18,10 +19,9 @@ static uint16_t g_obs_angle_ok_cnt = 0;   /* 观测角度连续收敛计数 */
 static uint16_t g_bus_uv_cnt = 0;         /* 母线欠压持续计数 */
 static uint16_t g_run_stall_cnt = 0;      /* 闭环失速连续计数 */
 static uint32_t g_open_start_tick;        // 系统tick获取
-static uint32_t last_tick = 0;                 /* 梯形加减速实例：目标速度斜坡生成 */
+static uint32_t last_tick = 0;            /* 梯形加减速实例：目标速度斜坡生成 */
 
-
-void MotorStateChange(Motor_t *motor);
+static void MotorStateChange(Motor_t *motor);
 /**
  * @brief   规则组ADC通道采集中断回调函数，采集母线电压、波轮电位器以及温度数值
  * @param   null
@@ -43,8 +43,8 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
     }
 }
 /**
- * @brief   定时器2进行按键状态扫描以及波轮电位器速度设定
- * @param   null
+ * @brief   tim2进行按键状态扫描(已实现，未加入)、母线电压计算、波轮电位器速度设定、温度计算
+ * @param   TIM_HandleTypeDef *htim
  * @return  null
  */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
@@ -52,16 +52,21 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     if (htim->Instance == TIM2)
     {
         Motor_t *motor = GetMotorStruct();
-        motor->PID_Speed.aimValue = MOTOR_SEPPD_COEFFICIENT * motor->Current.pot_ratio;
+        Temperature_t *temp = GetTempStruct();
 
+        motor->Current.voltage_bus = g_API_Interface.Sample->GetVoltageBus(&motor->Current);
+        motor->PID_Speed.aimValue = MOTOR_SEPPD_COEFFICIENT * motor->Current.pot_ratio;
+        // 防止电位器归零时电压跳动导致状态频繁切换
         if (motor->PID_Speed.aimValue >= 10.0f)
         {
-            motor->State = MOTOR_OPENLOOP_CURRENT_OPEN;
+            motor->State = MOTOR_RUN;
         }
         else if (motor->PID_Speed.aimValue < 10.0f)
         {
             motor->State = MOTOR_STOP;
         }
+
+        g_API_Interface.Sample->GetTempture(temp);
     }
 }
 /**
@@ -75,16 +80,9 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
     {
         // 获取结构体
         Motor_t *motor = GetMotorStruct();
-
-        motor->FOC.Ts = motor->pwm_period;
-        motor->EAngle.Ts = motor->pwm_period;
-        motor->PLL.Ts = motor->pwm_period;
-        motor->SMO.Ts = motor->pwm_period;
-        motor->TAccDec.Ts = motor->pwm_period;
         // 获取到两相的adc原始值
         motor->Current.current_adc_a = HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_1);
         motor->Current.current_adc_c = HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_2);
-        motor->Current.voltage_bus = g_API_Interface.Sample->GetVoltageBus(&motor->Current);
 
         MotorStateChange(motor);
     }
@@ -95,31 +93,22 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
  * @param   Motor_t *motor
  * @return  null
  */
-void MotorStateChange(Motor_t *motor)
+static void MotorStateChange(Motor_t *motor)
 {
     switch (motor->State)
     {
-    case MOTOR_STOP:
-        g_API_Interface.Driver->MotorDriverDisable();
-        g_API_Interface.Driver->SetPWMValue(PWM_ARR_ZERO, PWM_ARR_ZERO, PWM_ARR_ZERO);
-        break;
-    case MOTOR_OPENLOOP_CURRENT_OPEN:
-        g_API_Interface.Driver->MotorDriverEnable();
-        g_API_Interface.Switch->StrongDragCurrentOpenLoop(motor);
-        motor->State = MOTOR_OPENLOOP_CURRENT_CLOSE;
-        break;
-    case MOTOR_OPENLOOP_CURRENT_CLOSE:
-        g_API_Interface.Driver->MotorDriverEnable();
-        g_API_Interface.Switch->StrongDragCurrentCloseLoop(motor);
-        motor->State = STRONG_DRAG_SMO_SPEED_CURRENT_LOOP;
-        break;
-    case STRONG_DRAG_SMO_SPEED_CURRENT_LOOP:
-        g_API_Interface.Driver->MotorDriverEnable();
-        g_API_Interface.Switch->StrongDragSmoSpeedCurrentLoop(motor);
-        break;
-    default:
-        motor->State = MOTOR_STOP;
-        break;
+        case MOTOR_STOP:
+            g_API_Interface.Driver->MotorDriverDisable();
+            g_API_Interface.Driver->SetPWMValue(PWM_ARR_ZERO, PWM_ARR_ZERO, PWM_ARR_ZERO);
+            break;
+        case MOTOR_RUN:
+            g_API_Interface.Driver->MotorDriverEnable();
+            g_API_Interface.Switch->StrongDragSmoSpeedCurrentLoop(motor);
+            g_API_Interface.Driver->SetPWMValue(motor->FOC.DutyCycleA, motor->FOC.DutyCycleB, motor->FOC.DutyCycleC);
+            break;
+        default:
+            motor->State = MOTOR_STOP;
+            break;
     }
 }
 /************************************************************************************************/
@@ -159,6 +148,8 @@ void TemperatureInit(Temperature_t *temp)
  */
 void MotorParaInit(Motor_t *motor)
 {
+    // 获取运行周期
+    motor->pwm_period = g_API_Interface.Sample->GetPwmPeriod();
     // current parameter init
     motor->Current.adc_bus = 0.0f;
     motor->Current.current_adc_a = 0.0f;
@@ -233,7 +224,7 @@ void MotorParaInit(Motor_t *motor)
     motor->PLL.e_beta_hat = 0.0f;
     motor->PLL.theta_hat_lpf = 0.0f;
     motor->PLL.omerga_hat_lpf = 0.0f;
-    motor->PLL.Ts = 0.0f;
+    motor->PLL.Ts = motor->pwm_period;
     // smo parameter
     motor->SMO.e_alpha_hat = 0.0f;
     motor->SMO.e_beta_hat = 0.0f;
@@ -243,7 +234,7 @@ void MotorParaInit(Motor_t *motor)
     motor->SMO.I_beta_hat = 0.0f;
     motor->SMO.K_slide = 14.0f;
     motor->SMO.wc = 1000.0f;
-    motor->SMO.Ts = 0.0f;
+    motor->SMO.Ts = motor->pwm_period;
     // EAngle parameter
     motor->EAngle.accel = 0.0f;
     motor->EAngle.omega = 0.0f;
@@ -251,7 +242,7 @@ void MotorParaInit(Motor_t *motor)
     motor->EAngle.omega_start = 0.0f;
     motor->EAngle.theta_map = 0.0f;
     motor->EAngle.theta_pu = 0.0f;
-    motor->EAngle.Ts = 0.0f;
+    motor->EAngle.Ts = motor->pwm_period;
     // TAccDec parameter
     motor->TAccDec.AccSpeed = 0.0f;
     motor->TAccDec.SpeedChangeIncrement = 0.0f;
@@ -261,16 +252,37 @@ void MotorParaInit(Motor_t *motor)
     motor->TAccDec.SpeedOut = 0.0f;
     motor->TAccDec.SpeedTargetIncrement = 0.0f;
     motor->TAccDec.TargetSpeed = 0.0f;
-    motor->TAccDec.Ts = 0.0f;
+    motor->TAccDec.Ts = motor->pwm_period;
+
+    motor->ModeChange.CheckCnt = 0;
+    motor->ModeChange.CloseMinSpeed = 0.0f;
+    motor->ModeChange.CloseRunTime = 0;
+    motor->ModeChange.CloseSpeed = 0.0f;
+    motor->ModeChange.CloseToOpenSwitchSpeed = 0.0f;
+    motor->ModeChange.CurrChangeRate = 0.0f;
+    motor->ModeChange.EleCloseSpeedAbs = 0.0f;
+    motor->ModeChange.EleOpenSpeedAbs = 0.0f;
+    motor->ModeChange.ErrCnt = 0;
+    motor->ModeChange.ErrFlag = 0;
+    motor->ModeChange.ErrTimes = 0;
+    motor->ModeChange.LastTargetSpeed = 0.0f;
+    motor->ModeChange.ObsMag = 0.0f;
+    motor->ModeChange.OpenCurr = 0.0f;
+    motor->ModeChange.OpenCurrLast = 0.0f;
+    motor->ModeChange.OpenCurrMax = 0.0f;
+    motor->ModeChange.OpenSpeed = 0.0f;
+    motor->ModeChange.OpenToCloseSwitchSpeed = 0.0f;
+    motor->ModeChange.SpeedErr = 0.0f;
+    motor->ModeChange.SpeedErrFlt = 0.0f;
+    motor->ModeChange.ThetaErr = 0.0f;
+    motor->ModeChange.ThetaObs = 0.0f;
+    motor->ModeChange.ThetaRef = 0.0f;
     // 电机初始状态
     motor->State = MOTOR_STOP;
 
     HAL_ADC_Start_DMA(&hadc2, (uint32_t *)g_adc_buf, SAMPLE_BUFFER);
     HAL_ADCEx_InjectedStart_IT(&hadc2);
-    /* 注入转换由 TIM1 更新中断（HAL_TIM_PeriodElapsedCallback）逐周期软件触发。
-       关键：HAL_TIM_PWM_Start_IT 只使能 CC 中断、不使能更新中断，
-       必须用 HAL_TIM_Base_Start_IT 使能更新中断（参照盛浩板），
-       否则 HAL_TIM_PeriodElapsedCallback 永不执行、注入永不触发、状态机卡在 CALIB */
+
     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
@@ -283,23 +295,32 @@ void MotorParaInit(Motor_t *motor)
  * @param   State_t state
  * @return  状态名
  */
+void FuncRegister(void)
+{
+    Driver_Register(&g_API_Interface);
+    Sample_Register(&g_API_Interface);
+    Observer_Register(&g_API_Interface);
+    FOC_Register(&g_API_Interface);
+    TAccDec_Register(&g_API_Interface);
+    Switch_Register(&g_API_Interface);
+}
 const char *StateName(State_t state)
 {
     switch (state)
     {
-    case MOTOR_OPENLOOP_CURRENT_OPEN:           return "Strong Drag:Open current";
-    case MOTOR_OPENLOOP_CURRENT_CLOSE:          return "Strong Drag:Close current";
-    case STRONG_DRAG_SMO_SPEED_CURRENT_LOOP:    return "closed loop:SMO";
-    case MOTOR_STOP:                            return "STOP";
-    default:                                    return "ERROR";
+    case MOTOR_RUN:    return "RUN";
+    case MOTOR_STOP:   return "STOP";
+    default:           return "ERROR";
     }
 }
-/**主函数中实现 */
+/************************************************************************************************/
+/**************************************parameter Init********************************************/
+/************************************************************************************************/
 void TxMotorData(Motor_t *motor, Temperature_t *temp)
 {
-    // 数据发送（含调试量：Vd/Vq 电流环输出、Duty_a 占空比、adcA 注入采样原始值、ofA 偏置）
+    // 数据发送
     int Tx_buff_len = snprintf(Tx_buffer, sizeof(Tx_buffer),
-                               "|St|Aim|Now|Theta|Vbus|Va|Vb|Vc|Vd|Vq|Da|adcA|ofA|:%s,%.1f,%.1f,%.2f,%.1f,%.2f,%.2f,%.2f,%.1f,%.1f,%.3f,%u,%u\n",
+                               "|St|Aim|Now|Theta|Vbus|Va|Vb|Vc|temp|:%s,%.1f,%.1f,%.2f,%.1f,%.2f,%.2f,%.2f, %.1f\n",
                                StateName(motor->State),
                                motor->PID_Speed.aimValue,
                                motor->PID_Speed.nowValue,
@@ -308,11 +329,7 @@ void TxMotorData(Motor_t *motor, Temperature_t *temp)
                                motor->FOC.Va,
                                motor->FOC.Vb,
                                motor->FOC.Vc,
-                               motor->FOC.Vd,
-                               motor->FOC.Vq,
-                               motor->FOC.DutyCycleA,
-                               motor->Current.current_adc_a,
-                               (unsigned int)motor->Current.current_offset_Ia);
+                               temp->curr_temp);
     if ((Tx_buff_len > 0) && (Tx_buff_len <= TX_BUFFER_SIZE))
     {
         printf("%s", Tx_buffer);

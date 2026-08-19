@@ -9,20 +9,20 @@
 #include <string.h>
 #include "motorPara.h"
 
-static Temperature_t *temperature = {0};
-static Motor_t *motor = {0};
+static Temperature_t temperature = {0};
+static Motor_t motor = {0};
 
 Temperature_t *GetTempStruct(void)
 {
-    return temperature;
+    return &temperature;
 } 
 
 Motor_t *GetMotorStruct(void)
 {
-    return motor;
+    return &motor;
 } 
 
-const g_MotorInterface_t g_API_Interface = {
+g_MotorInterface_t g_API_Interface = {
     .Driver = NULL,
     .FOC = NULL,
     .Observer = NULL,
@@ -30,4 +30,3 @@ const g_MotorInterface_t g_API_Interface = {
     .TAccDec = NULL,
     .Switch = NULL,
 };
-

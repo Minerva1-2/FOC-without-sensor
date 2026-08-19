@@ -41,6 +41,9 @@ foc_sensorless/stm32g4xx_it.o: ..\Core\Src\stm32g4xx_it.c \
   D:\keil\core\ARM\ARMCLANG\Bin\..\include\stdio.h \
   ..\motorControl\Inc\motorPara.h \
   D:\keil\core\ARM\ARMCLANG\Bin\..\include\stdbool.h \
-  ..\motorControl\algorithm\Inc\observer.h \
-  D:\keil\core\ARM\ARMCLANG\Bin\..\include\math.h \
-  ..\motorControl\Inc\motorPara.h ..\Core\Inc\tim.h
+  ..\motorControl\hardware\Inc\sample.h \
+  D:\keil\core\ARM\ARMCLANG\Bin\..\include\math.h ..\Core\Inc\tim.h \
+  ..\motorControl\Inc\motorPara.h ..\motorControl\algorithm\Inc\foc.h \
+  ..\motorControl\algorithm\Inc\taccdec.h \
+  ..\motorControl\Inc\statueSwitch.h \
+  ..\motorControl\algorithm\Inc\observer.h

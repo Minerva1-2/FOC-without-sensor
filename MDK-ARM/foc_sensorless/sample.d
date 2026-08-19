@@ -38,5 +38,12 @@ foc_sensorless/sample.o: ..\motorControl\hardware\Src\sample.c \
   ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal_tim_ex.h \
   ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal_uart.h \
   ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal_uart_ex.h \
+  ..\motorControl\Inc\motorPara.h ..\motorControl\hardware\Inc\driver.h \
+  ..\Core\Inc\gpio.h ..\motorControl\Inc\globalControl.h \
+  D:\keil\core\ARM\ARMCLANG\Bin\..\include\stdio.h \
   ..\motorControl\Inc\motorPara.h \
+  ..\motorControl\algorithm\Inc\observer.h \
+  ..\motorControl\algorithm\Inc\foc.h \
+  ..\motorControl\algorithm\Inc\taccdec.h \
+  ..\motorControl\Inc\statueSwitch.h \
   ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_ll_rcc.h

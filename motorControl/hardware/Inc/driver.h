@@ -11,6 +11,9 @@
 
 #include "gpio.h"
 #include "globalControl.h"
+#include "motorPara.h"
 #include "tim.h"
+
+void Driver_Register(g_MotorInterface_t *iface);
 
 #endif

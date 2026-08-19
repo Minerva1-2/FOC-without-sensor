@@ -4,10 +4,11 @@ foc_sensorless/foc.o: ..\motorControl\algorithm\Src\foc.c \
   D:\keil\core\ARM\ARMCLANG\Bin\..\include\stdint.h \
   ..\motorControl\Inc\motorPara.h \
   D:\keil\core\ARM\ARMCLANG\Bin\..\include\stdbool.h \
-  ..\motorControl\Inc\globalControl.h \
-  D:\keil\core\ARM\ARMCLANG\Bin\..\include\stdio.h \
-  ..\motorControl\Inc\motorPara.h \
-  ..\motorControl\algorithm\Inc\observer.h \
+  ..\motorControl\hardware\Inc\sample.h ..\Core\Inc\tim.h \
+  ..\Core\Inc\main.h ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal.h \
+  ..\Core\Inc\stm32g4xx_hal_conf.h \
+  ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal_rcc.h \
+  ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal_def.h \
   ..\Drivers\CMSIS\Device\ST\STM32G4xx\Include\stm32g4xx.h \
   ..\Drivers\CMSIS\Device\ST\STM32G4xx\Include\stm32g431xx.h \
   ..\Drivers\CMSIS\Include\core_cm4.h \
@@ -18,10 +19,6 @@ foc_sensorless/foc.o: ..\motorControl\algorithm\Src\foc.c \
   D:\keil\core\ARM\ARMCLANG\Bin\..\include\arm_acle.h \
   ..\Drivers\CMSIS\Include\mpu_armv7.h \
   ..\Drivers\CMSIS\Device\ST\STM32G4xx\Include\system_stm32g4xx.h \
-  ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal.h \
-  ..\Core\Inc\stm32g4xx_hal_conf.h \
-  ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal_rcc.h \
-  ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal_def.h \
   ..\Drivers\STM32G4xx_HAL_Driver\Inc\Legacy\stm32_hal_legacy.h \
   D:\keil\core\ARM\ARMCLANG\Bin\..\include\stddef.h \
   ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal_rcc_ex.h \
@@ -42,4 +39,11 @@ foc_sensorless/foc.o: ..\motorControl\algorithm\Src\foc.c \
   ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal_tim.h \
   ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal_tim_ex.h \
   ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal_uart.h \
-  ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal_uart_ex.h
+  ..\Drivers\STM32G4xx_HAL_Driver\Inc\stm32g4xx_hal_uart_ex.h \
+  ..\motorControl\hardware\Inc\driver.h ..\Core\Inc\gpio.h \
+  ..\motorControl\Inc\globalControl.h \
+  D:\keil\core\ARM\ARMCLANG\Bin\..\include\stdio.h \
+  ..\motorControl\Inc\motorPara.h \
+  ..\motorControl\algorithm\Inc\observer.h \
+  ..\motorControl\algorithm\Inc\taccdec.h \
+  ..\motorControl\Inc\statueSwitch.h

@@ -37,21 +37,21 @@ static void MotorDriverDisable(void)
  * @param   State_t state
  * @return  null
  */
-static void LedControl(State_t state)
+static void LedControl(MOTION_STATE state)
 {
-    if (state == STRONG_DRAG_SMO_SPEED_CURRENT_LOOP)
+    if (state == TACC_UNIFORM)
     {
         HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET); // ALL
         HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, GPIO_PIN_RESET);
         HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, GPIO_PIN_RESET);
     }
-    else if (state == MOTOR_OPENLOOP_CURRENT_OPEN)
+    else if (state == TACC_DECELERATE)
     {
         HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET); // Blue
         HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, GPIO_PIN_SET);
         HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, GPIO_PIN_SET);
     }
-    else if (state == MOTOR_OPENLOOP_CURRENT_CLOSE)
+    else if (state == TACC_ACCELERATE)
     {
         HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, GPIO_PIN_RESET); // Green
         HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);

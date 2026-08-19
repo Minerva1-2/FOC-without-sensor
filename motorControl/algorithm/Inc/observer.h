@@ -10,4 +10,5 @@
 #define SMO_LPF_ALPHA   (0.1f)
 
 void Observer_Register(g_MotorInterface_t *iface);
+
 #endif

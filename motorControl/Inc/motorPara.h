@@ -19,9 +19,7 @@
 /**********************************************************************************************************/
 typedef enum 
 {
-    MOTOR_OPENLOOP_CURRENT_OPEN,        /* 开环强拖：速度、电流开环 */   
-    MOTOR_OPENLOOP_CURRENT_CLOSE,       /* 开环强拖：速度开环、电流闭环，旋转磁场牵引转子 */
-    STRONG_DRAG_SMO_SPEED_CURRENT_LOOP, /* 闭环运行：SMO+PLL 速度/电流双闭环 */
+    MOTOR_RUN,                          /* 闭环运行：SMO+PLL 速度/电流双闭环 */
     MOTOR_STOP,                         /* 停机：零占空比 */
 }State_t;
 
@@ -37,13 +35,7 @@ typedef enum
     TACC_ACCELERATE,                    /* 加速 */
     TACC_DECELERATE,                    /* 减速 */
 }MOTION_STATE;
-/**
- * 电机错误状态
- */
-typedef enum
-{
-    MOTOR_MODE_CHANGE_ERROR,
-}Error_t;
+
 /* PID参数 */
 typedef struct
 {
@@ -128,7 +120,7 @@ typedef struct {
     MOTION_STATE State;
 } TAccDec_t;
 
-/* 电角度发生器：开环强拖阶段产生旋转电角度（参照盛浩 Electrical_Angle_Generator）。
+/* 电角度发生器：开环强拖阶段产生旋转电角度。
    角速度：电气 rpm（可与 TAccDec.SpeedOut 直接对接，无需换算），恒定加速度斜坡；
    角度：标幺值 theta_pu(0~1) 循环积分（0~1 对应 0~360° 电角度），输出时 ×2π 转 rad。 */
 typedef struct {
@@ -169,6 +161,8 @@ typedef struct
     float CloseMinSpeed;
     float CurrChangeRate;
     float ObsMag;
+    uint8_t AlignFlag;      /* 预定位完成标志：0=预定位进行中，1=完成 */
+    uint16_t AlignCnt;      /* 预定位计时(控制周期数) */
 }ModeChange_t;
 
 typedef struct
@@ -188,7 +182,6 @@ typedef struct
     float pwm_period;                               // PWM运行时间
 
     State_t State;
-    Error_t Error;
     Current_t Current;
     PID_t PID_Speed;
     PID_t PID_Iq;
@@ -207,7 +200,7 @@ typedef struct
 {
     void (*MotorDriverEnable)(void);
     void (*MotorDriverDisable)(void);
-    void (*LedControl)(State_t state);
+    void (*LedControl)(MOTION_STATE state);
     void (*SetPWMValue)(uint32_t PWMValue_A, uint32_t PWMValue_B, uint32_t PWMValue_C);
 }API_Driver_t;
 
@@ -258,7 +251,7 @@ typedef struct
     API_Switch_t *Switch;
 }g_MotorInterface_t;
 
-extern const g_MotorInterface_t g_API_Interface;
+extern g_MotorInterface_t g_API_Interface;
 
 Temperature_t *GetTempStruct(void);
 Motor_t *GetMotorStruct(void);
